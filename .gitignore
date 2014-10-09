@@ -1,0 +1,11 @@
+[Oo]bj/
+[Bb]in/
+*.user
+*.vspscc
+*.vssscc
+*.suo
+*.cache
+*.csproj.user
+packages/*
+msbuild.log
+nuget.exe
