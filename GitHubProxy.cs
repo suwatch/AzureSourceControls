@@ -74,9 +74,9 @@ namespace AzureSourceControls
             }
 
             var strb = new StringBuilder();
-            strb.AppendFormat("client_id={0}", HttpUtility.UrlEncode(_clientId));
-            strb.AppendFormat("&client_secret={0}", HttpUtility.UrlEncode(_clientSecret));
-            strb.AppendFormat("&code={0}", HttpUtility.UrlEncode(code));
+            strb.AppendFormat("client_id={0}", WebUtility.UrlEncode(_clientId));
+            strb.AppendFormat("&client_secret={0}", WebUtility.UrlEncode(_clientSecret));
+            strb.AppendFormat("&code={0}", WebUtility.UrlEncode(code));
 
             var content = new StringContent(strb.ToString());
             content.Headers.ContentType = new MediaTypeHeaderValue(Constants.FormUrlEncodedMediaType);
