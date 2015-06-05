@@ -29,7 +29,7 @@ namespace AzureSourceControls
         {
             CommonUtils.ValidateNullArgument("redirectUri", redirectUri);
 
-            return await _provider.GetOAuthInfo(redirectUri);
+            return await _provider.GetOAuthInfo(redirectUri).ConfigureAwait(continueOnCapturedContext: false);
         }
 
         public async Task<OAuthV1Info> Authorize(string callbackUri, string token, string tokenSecret)
@@ -56,7 +56,7 @@ namespace AzureSourceControls
                 throw new OAuthException("Bitbucket Authorize: missing oauth_verifier query string.", HttpStatusCode.Unauthorized, callbackUri);
             }
 
-            return await _provider.Authorize(oauth_verifier, token, tokenSecret);
+            return await _provider.Authorize(oauth_verifier, token, tokenSecret).ConfigureAwait(continueOnCapturedContext: false);
         }
 
         public async Task<BitbucketAccountInfo> GetAccoutInfo(string token, string tokenSecret)
@@ -64,7 +64,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("token", token);
             CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
 
-            var user = await _provider.GetAsync<BitbucketUserInfo>("GetAccoutInfo", "https://api.bitbucket.org/1.0/user/", token, tokenSecret);
+            var user = await _provider.GetAsync<BitbucketUserInfo>("GetAccoutInfo", "https://api.bitbucket.org/1.0/user/", token, tokenSecret).ConfigureAwait(continueOnCapturedContext: false);
             return user.user;
         }
 
@@ -73,7 +73,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("token", token);
             CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
 
-            return await _provider.GetAsync<BitbucketRepoInfo[]>("ListRepositories", "https://api.bitbucket.org/1.0/user/repositories/", token, tokenSecret);
+            return await _provider.GetAsync<BitbucketRepoInfo[]>("ListRepositories", "https://api.bitbucket.org/1.0/user/repositories/", token, tokenSecret).ConfigureAwait(continueOnCapturedContext: false);
         }
 
         public async Task<BitbucketRepoInfo> GetRepository(string repoUrl, string token, string tokenSecret)
@@ -83,7 +83,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
 
             var requestUri = GetRequestUri(repoUrl);
-            return await _provider.GetAsync<BitbucketRepoInfo>("GetRepository", requestUri, token, tokenSecret);
+            return await _provider.GetAsync<BitbucketRepoInfo>("GetRepository", requestUri, token, tokenSecret).ConfigureAwait(continueOnCapturedContext: false);
         }
 
         public async Task<IEnumerable<BitbucketBranchInfo>> ListBranches(string repoUrl, string token, string tokenSecret)
@@ -93,7 +93,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
 
             var requestUri = GetRequestUri(repoUrl, "branches");
-            var branches = await _provider.GetAsync<Dictionary<string, BitbucketBranchInfo>>("ListBranches", requestUri, token, tokenSecret);
+            var branches = await _provider.GetAsync<Dictionary<string, BitbucketBranchInfo>>("ListBranches", requestUri, token, tokenSecret).ConfigureAwait(continueOnCapturedContext: false);
             return branches.Select(p =>
             {
                 p.Value.name = p.Key;
@@ -108,7 +108,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
             CommonUtils.ValidateNullArgument("hookUrl", hookUrl);
 
-            var hook = await GetWebHookInfo(repoUrl, token, tokenSecret, hookUrl);
+            var hook = await GetWebHookInfo(repoUrl, token, tokenSecret, hookUrl).ConfigureAwait(continueOnCapturedContext: false);
             if (hook != null)
             {
                 if (string.Equals(hookUrl, hook.service.url, StringComparison.OrdinalIgnoreCase))
@@ -134,7 +134,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
             CommonUtils.ValidateNullArgument("hookUrl", hookUrl);
 
-            var hook = await GetWebHookInfo(repoUrl, token, tokenSecret, hookUrl);
+            var hook = await GetWebHookInfo(repoUrl, token, tokenSecret, hookUrl).ConfigureAwait(continueOnCapturedContext: false);
             if (hook != null)
             {
                 var requestUri = GetRequestUri(repoUrl, "services", hook.id);
@@ -152,7 +152,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("title", title);
             CommonUtils.ValidateNullArgument("sshKey", sshKey);
 
-            await RemoveSSHKey(repoUrl, token, tokenSecret, sshKey);
+            await RemoveSSHKey(repoUrl, token, tokenSecret, sshKey).ConfigureAwait(continueOnCapturedContext: false);
 
             var sshKeyInfo = new BitbucketSSHKeyInfo { label = title, key = sshKey };
             var requestUri = GetRequestUri(repoUrl, "deploy-keys");
@@ -166,7 +166,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
             CommonUtils.ValidateNullArgument("sshKey", sshKey);
 
-            var sshKeyInfo = await GetSSHKey(repoUrl, token, tokenSecret, sshKey);
+            var sshKeyInfo = await GetSSHKey(repoUrl, token, tokenSecret, sshKey).ConfigureAwait(continueOnCapturedContext: false);
             if (sshKeyInfo != null)
             {
                 var requestUri = GetRequestUri(repoUrl, "deploy-keys", sshKeyInfo.pk);

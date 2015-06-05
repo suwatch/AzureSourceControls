@@ -26,7 +26,7 @@ namespace AzureSourceControls
         {
             CommonUtils.ValidateNullArgument("redirectUri", redirectUri);
 
-            return await _provider.GetOAuthInfo(redirectUri, scope: "project_info,test_web_hook");
+            return await _provider.GetOAuthInfo(redirectUri, scope: "project_info,test_web_hook").ConfigureAwait(continueOnCapturedContext: false);
         }
 
         public async Task<OAuthV1Info> Authorize(string callbackUri, string token, string tokenSecret)
@@ -53,7 +53,7 @@ namespace AzureSourceControls
                 throw new OAuthException("CodePlex Authorize: missing oauth_verifier query string.", HttpStatusCode.Unauthorized, callbackUri);
             }
 
-            return await _provider.Authorize(oauth_verifier, token, tokenSecret);
+            return await _provider.Authorize(oauth_verifier, token, tokenSecret).ConfigureAwait(continueOnCapturedContext: false);
         }
 
         public async Task<CodePlexAccountInfo> GetAccountInfo(string token, string tokenSecret)
@@ -62,7 +62,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
 
             var requestUri = String.Format("https://www.codeplex.com/api/user");
-            return await _provider.GetAsync<CodePlexAccountInfo>("GetAccountInfo", requestUri, token, tokenSecret);
+            return await _provider.GetAsync<CodePlexAccountInfo>("GetAccountInfo", requestUri, token, tokenSecret).ConfigureAwait(continueOnCapturedContext: false);
         }
 
         public async Task<IEnumerable<CodePlexProjectInfo>> ListProjects(string token, string tokenSecret)
@@ -71,7 +71,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
 
             var requestUri = "https://www.codeplex.com/api/user/repos?expanded=true&role=coordinator";
-            var projects = await _provider.GetAsync<CodePlexProject[]>("ListProjects", requestUri, token, tokenSecret);
+            var projects = await _provider.GetAsync<CodePlexProject[]>("ListProjects", requestUri, token, tokenSecret).ConfigureAwait(continueOnCapturedContext: false);
             return projects.Select(p => p.Project);
         }
 
@@ -82,7 +82,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
 
             var requestUri = GetRequestUri(repoUrl);
-            return await _provider.GetAsync<CodePlexProjectInfo>("GetProject", requestUri, token, tokenSecret);
+            return await _provider.GetAsync<CodePlexProjectInfo>("GetProject", requestUri, token, tokenSecret).ConfigureAwait(continueOnCapturedContext: false);
         }
 
         public async Task AddWebHook(string repoUrl, string token, string tokenSecret, string hookUrl)
@@ -102,7 +102,7 @@ namespace AzureSourceControls
                 }
             };
 
-            await _provider.PatchAsJsonAsync("AddWebHook", requestUri, token, tokenSecret, projectInfo);
+            await _provider.PatchAsJsonAsync("AddWebHook", requestUri, token, tokenSecret, projectInfo).ConfigureAwait(continueOnCapturedContext: false);
         }
 
         public async Task RemoveWebHook(string repoUrl, string token, string tokenSecret)
@@ -120,7 +120,7 @@ namespace AzureSourceControls
                 }
             };
 
-            await _provider.PatchAsJsonAsync("RemoveWebHook", requestUri, token, tokenSecret, projectInfo);
+            await _provider.PatchAsJsonAsync("RemoveWebHook", requestUri, token, tokenSecret, projectInfo).ConfigureAwait(continueOnCapturedContext: false);
         }
 
         static private string GetRequestUri(string repoUrl)

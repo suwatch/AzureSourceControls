@@ -62,7 +62,7 @@ namespace AzureSourceControls
                     requestUri: OAuthRequestTokenUri,
                     redirectUri: redirectUri,
                     scope: scope);
-                using (var response = await client.PostAsync(OAuthRequestTokenUri, null))
+                using (var response = await client.PostAsync(OAuthRequestTokenUri, null).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     string content = null;
                     if (response.Content != null)
@@ -112,7 +112,7 @@ namespace AzureSourceControls
                     token: token, 
                     tokenSecret: tokenSecret,
                     verifier: verifier);
-                using (var response = await client.PostAsync(OAuthAccessTokenUri, null))
+                using (var response = await client.PostAsync(OAuthAccessTokenUri, null).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     string content = null;
                     if (response.Content != null)
@@ -156,7 +156,7 @@ namespace AzureSourceControls
                     requestUri,
                     token: token,
                     tokenSecret: tokenSecret);
-                using (var response = await client.GetAsync(requestUri))
+                using (var response = await client.GetAsync(requestUri).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     return await ProcessResponse<T>(operation, response);
                 }
@@ -174,7 +174,7 @@ namespace AzureSourceControls
                     requestUri,
                     token: token,
                     tokenSecret: tokenSecret);
-                using (var response = await client.PatchAsJsonAsync(requestUri, value))
+                using (var response = await client.PatchAsJsonAsync(requestUri, value).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     return await ProcessEmptyResponse(operation, response);
                 }
@@ -193,7 +193,7 @@ namespace AzureSourceControls
                     token: token,
                     tokenSecret: tokenSecret);
 
-                using (var response = await client.PostAsJsonAsync(requestUri, value))
+                using (var response = await client.PostAsJsonAsync(requestUri, value).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     return await ProcessEmptyResponse(operation, response);
                 }
@@ -212,7 +212,7 @@ namespace AzureSourceControls
                     token: token,
                     tokenSecret: tokenSecret);
 
-                using (var response = await client.PostAsync(requestUri, content))
+                using (var response = await client.PostAsync(requestUri, content).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     return await ProcessEmptyResponse(operation, response);
                 }
@@ -231,7 +231,7 @@ namespace AzureSourceControls
                     token: token,
                     tokenSecret: tokenSecret);
 
-                using (var response = await client.PutAsJsonAsync(requestUri, value))
+                using (var response = await client.PutAsJsonAsync(requestUri, value).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     return await ProcessEmptyResponse(operation, response);
                 }
@@ -250,7 +250,7 @@ namespace AzureSourceControls
                     token: token,
                     tokenSecret: tokenSecret);
 
-                using (var response = await client.DeleteAsync(requestUri))
+                using (var response = await client.DeleteAsync(requestUri).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     return await ProcessEmptyResponse(operation, response);
                 }

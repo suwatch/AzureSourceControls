@@ -83,7 +83,7 @@ namespace AzureSourceControls
 
             using (var client = CreateHttpClient())
             {
-                using (var response = await client.PostAsync("https://github.com/login/oauth/access_token", content))
+                using (var response = await client.PostAsync("https://github.com/login/oauth/access_token", content).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     var info = await ProcessResponse<OAuthInfo>("Authorize", response);
                     return info.access_token;
@@ -101,7 +101,7 @@ namespace AzureSourceControls
                 ListOrgRepos(accessToken)
             };
 
-            await Task.WhenAll(tasks);
+            await Task.WhenAll(tasks).ConfigureAwait(continueOnCapturedContext: false);
 
             return CommonUtils.ConcatEnumerable(tasks.Select(t => t.Result));
         }
@@ -113,7 +113,7 @@ namespace AzureSourceControls
             var requestUri = "https://api.github.com/user";
             using (var client = CreateGitHubClient(accessToken))
             {
-                using (var response = await client.GetAsync(requestUri))
+                using (var response = await client.GetAsync(requestUri).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     return await ProcessResponse<GitHubAccountInfo>("GetAccountInfo", response);
                 }
@@ -128,7 +128,7 @@ namespace AzureSourceControls
             var requestUri = GetRequestUri(repoUrl);
             using (var client = CreateGitHubClient(accessToken))
             {
-                using (var response = await client.GetAsync(requestUri))
+                using (var response = await client.GetAsync(requestUri).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     return await ProcessResponse<GitHubRepoInfo>("GetRepository", response);
                 }
@@ -143,7 +143,7 @@ namespace AzureSourceControls
             var requestUri = GetRequestUri(repoUrl, "branches");
             using (var client = CreateGitHubClient(accessToken))
             {
-                using (var response = await client.GetAsync(requestUri))
+                using (var response = await client.GetAsync(requestUri).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     return await ProcessResponse<IEnumerable<GitHubBranchInfo>>("ListBranches", response);
                 }
@@ -181,7 +181,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
             CommonUtils.ValidateNullArgument("hookUrl", hookUrl);
 
-            var hook = await GetWebHookInfo(repoUrl, accessToken, hookUrl);
+            var hook = await GetWebHookInfo(repoUrl, accessToken, hookUrl).ConfigureAwait(continueOnCapturedContext: false);
             string id = null;
             if (hook != null)
             {
@@ -224,7 +224,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
             CommonUtils.ValidateNullArgument("hookUrl", hookUrl);
 
-            var hook = await GetWebHookInfo(repoUrl, accessToken, hookUrl);
+            var hook = await GetWebHookInfo(repoUrl, accessToken, hookUrl).ConfigureAwait(continueOnCapturedContext: false);
             if (hook == null)
             {
                 return false;
@@ -248,7 +248,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("sshKey", sshKey);
 
             // GitHub: Deploy keys are immutable. If you need to update a key, remove the key and create a new one instead.
-            await RemoveSSHKey(repoUrl, accessToken, sshKey);
+            await RemoveSSHKey(repoUrl, accessToken, sshKey).ConfigureAwait(continueOnCapturedContext: false);
 
             var sshKeyInfo = new GitHubSSHKeyInfo { title = title, key = sshKey };
             var requestUri = GetRequestUri(repoUrl, "keys");
@@ -267,7 +267,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
             CommonUtils.ValidateNullArgument("sshKey", sshKey);
 
-            var sshKeyInfo = await GetSSHKey(repoUrl, accessToken, sshKey);
+            var sshKeyInfo = await GetSSHKey(repoUrl, accessToken, sshKey).ConfigureAwait(continueOnCapturedContext: false);
             if (sshKeyInfo == null)
             {
                 return false;
