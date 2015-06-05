@@ -82,7 +82,7 @@ namespace AzureSourceControls
 
             using (var client = CreateHttpClient())
             {
-                using (var response = await client.PostAsync("https://app.vssps.visualstudio.com/oauth2/token", content))
+                using (var response = await client.PostAsync("https://app.vssps.visualstudio.com/oauth2/token", content).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     return await ProcessResponse<OAuthInfo>("Authorize", response);
                 }
@@ -100,7 +100,7 @@ namespace AzureSourceControls
 
             using (var client = CreateHttpClient())
             {
-                using (var response = await client.PostAsync("https://app.vssps.visualstudio.com/oauth2/token", content))
+                using (var response = await client.PostAsync("https://app.vssps.visualstudio.com/oauth2/token", content).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     return await ProcessResponse<OAuthInfo>("RefreshToken", response);
                 }
@@ -133,7 +133,7 @@ namespace AzureSourceControls
             var requestUri = String.Format("https://app.vssps.visualstudio.com/_apis/accounts?api-version={0}", ApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
-                using (var response = await client.GetAsync(requestUri))
+                using (var response = await client.GetAsync(requestUri).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     var result = await ProcessResponse<TfsResult<TfsAccountInfo>>("ListAccounts", response);
                     return result.value;
@@ -145,7 +145,7 @@ namespace AzureSourceControls
         {
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
 
-            var accounts = await ListAccounts(accessToken);
+            var accounts = await ListAccounts(accessToken).ConfigureAwait(continueOnCapturedContext: false);
             var tasks = accounts.Select(account => ListRepositories(account.accountName, accessToken));
             var result = await Task.WhenAll(tasks);
             return result.SelectMany(repo => repo).ToArray();
@@ -159,7 +159,7 @@ namespace AzureSourceControls
             var requestUri = String.Format("https://{0}.VisualStudio.com/DefaultCollection/_apis/git/repositories?api-version={1}", accountName, ApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
-                using (var response = await client.GetAsync(requestUri))
+                using (var response = await client.GetAsync(requestUri).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     var result = await ProcessResponse<TfsResult<TfsRepositoryInfo>>("ListRepositories", response);
                     return result.value;
@@ -175,7 +175,7 @@ namespace AzureSourceControls
             var requestUri = String.Format("{0}?api-version={1}", repoUrl, ApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
-                using (var response = await client.GetAsync(requestUri))
+                using (var response = await client.GetAsync(requestUri).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     return await ProcessResponse<TfsRepositoryInfo>("GetRepository", response);
                 }
@@ -190,7 +190,7 @@ namespace AzureSourceControls
             var requestUri = String.Format("{0}/refs?api-version={1}", repoUrl, ApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
-                using (var response = await client.GetAsync(requestUri))
+                using (var response = await client.GetAsync(requestUri).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     var result = await ProcessResponse<TfsResult<TfsBranchInfo>>("ListBranches", response);
                     return result.value;
@@ -210,7 +210,7 @@ namespace AzureSourceControls
             var removeWebHook = RemoveWebHook(repoUrl, accessToken, hookUrl);
             var getRository = GetRepository(repoUrl, accessToken);
 
-            await Task.WhenAll((Task)removeWebHook, getRository);
+            await Task.WhenAll((Task)removeWebHook, getRository).ConfigureAwait(continueOnCapturedContext: false);
 
             var repository = getRository.Result;
             var hook = new TfsWebHookInfo();
@@ -245,7 +245,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
             CommonUtils.ValidateNullArgument("hookUrl", hookUrl);
 
-            var hook = await GetWebHookInfo(repoUrl, accessToken, hookUrl);
+            var hook = await GetWebHookInfo(repoUrl, accessToken, hookUrl).ConfigureAwait(continueOnCapturedContext: false);
             if (hook == null)
             {
                 return false;

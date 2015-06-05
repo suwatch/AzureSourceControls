@@ -89,7 +89,7 @@ namespace AzureSourceControls
             content.Headers.ContentType = new MediaTypeHeaderValue(Constants.FormUrlEncodedMediaType);
             using (var client = CreateHttpClient())
             {
-                using (var response = await client.PostAsync("https://login.live.com/oauth20_token.srf", content))
+                using (var response = await client.PostAsync("https://login.live.com/oauth20_token.srf", content).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     var info = await ProcessOAuthResponse("Authorize", response);
                     info.redirect_uri = redirectUri.AbsoluteUri;
@@ -112,7 +112,7 @@ namespace AzureSourceControls
             content.Headers.ContentType = new MediaTypeHeaderValue(Constants.FormUrlEncodedMediaType);
             using (var client = CreateHttpClient())
             {
-                using (var response = await client.PostAsync("https://login.live.com/oauth20_token.srf", content))
+                using (var response = await client.PostAsync("https://login.live.com/oauth20_token.srf", content).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     var info = await ProcessOAuthResponse("Authorize", response);
                     info.redirect_uri = redirectUri;
@@ -129,7 +129,7 @@ namespace AzureSourceControls
             var requestUri = String.Format("https://apis.live.net/v5.0/me");
             using (var client = CreateHttpClient(accessToken))
             {
-                using (var response = await client.GetAsync(requestUri))
+                using (var response = await client.GetAsync(requestUri).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     return await ProcessResponse<LiveAccountInfo>("GetAccountInfo", response);
                 }
@@ -143,7 +143,7 @@ namespace AzureSourceControls
             var requestUri = String.Format("https://api.onedrive.com/v1.0/drive/special/approot/children");
             using (var client = CreateHttpClient(accessToken))
             {
-                using (var response = await client.GetAsync(requestUri))
+                using (var response = await client.GetAsync(requestUri).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     var items = await ProcessResponse<OneDriveItemCollection>("ListFolders", response);
                     return items.value;
@@ -162,7 +162,7 @@ namespace AzureSourceControls
             var requestUri = String.Format("https://api.onedrive.com/v1.0/drive/special/approot/children");
             using (var client = CreateHttpClient(accessToken))
             {
-                using (var response = await client.PostAsync(requestUri, content))
+                using (var response = await client.PostAsync(requestUri, content).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     if (response.StatusCode == HttpStatusCode.Conflict)
                     {
@@ -183,7 +183,7 @@ namespace AzureSourceControls
             var requestUri = String.Format("https://api.onedrive.com/v1.0/drive/special/approot:/{0}", path);
             using (var client = CreateHttpClient(accessToken))
             {
-                using (var response = await client.GetAsync(requestUri))
+                using (var response = await client.GetAsync(requestUri).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     return await ProcessResponse<OneDriveItem>("GetFolder", response);
                 }
@@ -198,7 +198,7 @@ namespace AzureSourceControls
             var requestUri = String.Format("https://api.onedrive.com/v1.0/drive/special/approot:/{0}", path);
             using (var client = CreateHttpClient(accessToken))
             {
-                using (var response = await client.GetAsync(requestUri))
+                using (var response = await client.GetAsync(requestUri).ConfigureAwait(continueOnCapturedContext: false))
                 {
                     return await ProcessResponse<OneDriveItem>("GetFile", response);
                 }
@@ -215,7 +215,7 @@ namespace AzureSourceControls
             requestUri = await GetItemUri(accessToken, requestUri) + "/content";
             using (var client = CreateHttpClient(accessToken))
             {
-                var response = await client.GetAsync(requestUri);
+                var response = await client.GetAsync(requestUri).ConfigureAwait(continueOnCapturedContext: false);
                 return (StreamContent)response.Content;
             }
         }
@@ -244,7 +244,7 @@ namespace AzureSourceControls
                         uri = String.Format("{0}?token={1}", requestUri, next);
                     }
 
-                    using (var response = await client.GetAsync(uri))
+                    using (var response = await client.GetAsync(uri).ConfigureAwait(continueOnCapturedContext: false))
                     {
                         changes = await ProcessResponse<Dictionary<string, object>>("GetChanges", response);
                     }

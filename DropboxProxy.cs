@@ -26,7 +26,7 @@ namespace AzureSourceControls
         {
             CommonUtils.ValidateNullArgument("redirectUri", redirectUri);
 
-            return await _provider.GetOAuthInfo(redirectUri);
+            return await _provider.GetOAuthInfo(redirectUri).ConfigureAwait(continueOnCapturedContext: false);
         }
 
         public async Task<OAuthV1Info> Authorize(string callbackUri, string token, string tokenSecret)
@@ -53,7 +53,7 @@ namespace AzureSourceControls
                 throw new OAuthException("Dropbox Authorize: missing uid query string.", HttpStatusCode.Unauthorized, callbackUri);
             }
 
-            return await _provider.Authorize(uid, token, tokenSecret);
+            return await _provider.Authorize(uid, token, tokenSecret).ConfigureAwait(continueOnCapturedContext: false);
         }
 
         public async Task<DropboxAccountInfo> GetAccountInfo(string token, string tokenSecret)
@@ -61,7 +61,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("token", token);
             CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
 
-            return await _provider.GetAsync<DropboxAccountInfo>("GetAccountInfo", "https://api.dropbox.com/1/account/info", token, tokenSecret);
+            return await _provider.GetAsync<DropboxAccountInfo>("GetAccountInfo", "https://api.dropbox.com/1/account/info", token, tokenSecret).ConfigureAwait(continueOnCapturedContext: false);
         }
 
         public async Task<IEnumerable<string>> ListFolders(string token, string tokenSecret, string appName)
@@ -70,7 +70,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
             CommonUtils.ValidateNullArgument("appName", appName);
 
-            var info = await _provider.GetAsync<DropboxMetadataInfo>("ListFolders", "https://api.dropbox.com/1/metadata/sandbox", token, tokenSecret);
+            var info = await _provider.GetAsync<DropboxMetadataInfo>("ListFolders", "https://api.dropbox.com/1/metadata/sandbox", token, tokenSecret).ConfigureAwait(continueOnCapturedContext: false);
             return info.contents.Where(c => c.is_dir)
                 .Select(c => String.Format("https://www.dropbox.com/home/Apps/{0}/{1}", appName, c.path.Trim('/')));
         }
@@ -79,7 +79,7 @@ namespace AzureSourceControls
         {
             path = '/' + path.Trim('/').Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries).Last();
 
-            var folders = await ListFolders(token, tokenSecret, "app");
+            var folders = await ListFolders(token, tokenSecret, "app").ConfigureAwait(continueOnCapturedContext: false);
             if (!FolderExists(folders, path))
             {
                 var requestUri = String.Format("https://api.dropbox.com/1/fileops/create_folder?root=sandbox&path={0}", path);
