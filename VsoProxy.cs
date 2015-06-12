@@ -3,6 +3,7 @@
 // ----------------------------------------------------------------------------
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -14,7 +15,7 @@ using AzureSourceControls.Utils;
 
 namespace AzureSourceControls
 {
-    public class TfsProxy
+    public class VsoProxy
     {
         private const string ApiVersion = "1.0";
 
@@ -22,7 +23,7 @@ namespace AzureSourceControls
         private readonly string _clientSecret;
         private readonly Func<HttpClient> _httpClientFactory;
 
-        public TfsProxy(string clientId = null, string clientSecret = null, Func<HttpClient> httpClientFactory = null)
+        public VsoProxy(string clientId = null, string clientSecret = null, Func<HttpClient> httpClientFactory = null)
         {
             _clientId = clientId;
             _clientSecret = clientSecret;
@@ -89,6 +90,8 @@ namespace AzureSourceControls
             }
         }
 
+        // (203) NonAuthoritativeInformation means token expired
+        // Note: refresh token can only be used once and every refresh gets a new one
         public async Task<OAuthInfo> RefreshToken(string redirectUri, string refreshToken)
         {
             CommonUtils.ValidateNullArgument("_clientSecret", _clientSecret);
@@ -126,11 +129,32 @@ namespace AzureSourceControls
             return strb.ToString();
         }
 
-        public async Task<TfsAccountInfo[]> ListAccounts(string accessToken)
+        public async Task<TfsProfileInfo> GetProfile(string accessToken)
         {
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
 
-            var requestUri = String.Format("https://app.vssps.visualstudio.com/_apis/accounts?api-version={0}", ApiVersion);
+            var requestUri = String.Format("https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version={0}", ApiVersion);
+            using (var client = CreateTfsClient(accessToken))
+            {
+                using (var response = await client.GetAsync(requestUri))
+                {
+                    var result = await ProcessResponse<TfsProfileInfo>("GetProfile", response);
+                    return result;
+                }
+            }
+        }
+
+        public async Task<TfsAccountInfo[]> ListAccounts(string accessToken, string profileId = null)
+        {
+            CommonUtils.ValidateNullArgument("accessToken", accessToken);
+
+            if (String.IsNullOrEmpty(profileId))
+            {
+                var profile = await GetProfile(accessToken);
+                profileId = profile.id;
+            }
+
+            var requestUri = String.Format("https://app.vssps.visualstudio.com/_apis/accounts?ownerId={0}&api-version={1}", profileId, ApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
                 using (var response = await client.GetAsync(requestUri))
@@ -141,20 +165,22 @@ namespace AzureSourceControls
             }
         }
 
-        public async Task<TfsRepositoryInfo[]> ListRepositories(string accessToken)
+        public async Task<TfsRepositoryInfo[]> ListRepositories(string accessToken, string accountName = null)
         {
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
 
-            var accounts = await ListAccounts(accessToken);
-            var tasks = accounts.Select(account => ListRepositories(account.accountName, accessToken));
-            var result = await Task.WhenAll(tasks);
-            return result.SelectMany(repo => repo).ToArray();
-        }
+            if (String.IsNullOrEmpty(accountName))
+            {
+                var tasks = new List<Task<TfsRepositoryInfo[]>>();
+                foreach (var account in await ListAccounts(accessToken))
+                {
+                    tasks.Add(ListRepositories(accessToken, account.accountName));
+                }
 
-        public async Task<TfsRepositoryInfo[]> ListRepositories(string accountName, string accessToken)
-        {
-            CommonUtils.ValidateNullArgument("accountName", accountName);
-            CommonUtils.ValidateNullArgument("accessToken", accessToken);
+                var results = await Task.WhenAll(tasks);
+
+                return results.SelectMany(r => r).ToArray();
+            }
 
             var requestUri = String.Format("https://{0}.VisualStudio.com/DefaultCollection/_apis/git/repositories?api-version={1}", accountName, ApiVersion);
             using (var client = CreateTfsClient(accessToken))
@@ -167,27 +193,27 @@ namespace AzureSourceControls
             }
         }
 
-        public async Task<TfsRepositoryInfo> GetRepository(string repoUrl, string accessToken)
+        public async Task<TfsRepositoryInfo> GetRepository(string accessToken, string repoUrl)
         {
-            CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
+            CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
 
-            var requestUri = String.Format("{0}?api-version={1}", repoUrl, ApiVersion);
-            using (var client = CreateTfsClient(accessToken))
+            var repositories = await ListRepositories(accessToken);
+            var repository = repositories.FirstOrDefault(r => String.Equals(r.RepoUrl, repoUrl));
+            if (repository == null)
             {
-                using (var response = await client.GetAsync(requestUri))
-                {
-                    return await ProcessResponse<TfsRepositoryInfo>("GetRepository", response);
-                }
+                throw new InvalidOperationException("Vso GetRepository: Cannot find repository " + repoUrl);
             }
+
+            return repository;
         }
 
-        public async Task<TfsBranchInfo[]> ListBranches(string repoUrl, string accessToken)
+        public async Task<TfsBranchInfo[]> ListBranches(string accessToken, TfsRepositoryInfo repository)
         {
-            CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
+            CommonUtils.ValidateNullArgument("repository", repository);
 
-            var requestUri = String.Format("{0}/refs?api-version={1}", repoUrl, ApiVersion);
+            var requestUri = String.Format("{0}/refs?api-version={1}", repository.url, ApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
                 using (var response = await client.GetAsync(requestUri))
@@ -198,25 +224,45 @@ namespace AzureSourceControls
             }
         }
 
-        public async Task<TfsWebHookInfo> AddWebHook(string repoUrl, string branch, string accessToken, string hookUrl)
+        public async Task<TfsWebHookInfo[]> ListWebHooks(string accessToken, TfsRepositoryInfo repository)
         {
-            CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
+            CommonUtils.ValidateNullArgument("repository", repository);
+
+            var url = new Uri(repository.url);
+            var requestUri = String.Format("{0}://{1}/DefaultCollection/_apis/hooks/subscriptions?api-version={2}", url.Scheme, url.Authority, ApiVersion);
+            using (var client = CreateTfsClient(accessToken))
+            {
+                using (var response = await client.GetAsync(requestUri))
+                {
+                    var hooks = await ProcessResponse<TfsResult<TfsWebHookInfo>>("GetWebHookInfo", response);
+                    return hooks.value.Where(hook =>
+                    {
+                        if (repository.project != null && hook.publisherInputs != null && hook.consumerInputs != null && hook.consumerInputs.url != null)
+                        {
+                            return String.Equals(repository.id, hook.publisherInputs.repository, StringComparison.OrdinalIgnoreCase)
+                                && String.Equals(repository.project.id, hook.publisherInputs.projectId, StringComparison.OrdinalIgnoreCase);
+                        }
+
+                        return false;
+                    }).ToArray();
+                }
+            }
+        }
+
+        public async Task<TfsWebHookInfo> AddWebHook(string accessToken, TfsRepositoryInfo repository, string hookUrl, string branch = null)
+        {
+            CommonUtils.ValidateNullArgument("accessToken", accessToken);
+            CommonUtils.ValidateNullArgument("repository", repository);
             CommonUtils.ValidateNullArgument("hookUrl", hookUrl);
 
+            await RemoveWebHook(accessToken, repository, hookUrl);
+
             var hookUri = new Uri(hookUrl);
-            var repoUri = new Uri(repoUrl);
-
-            var removeWebHook = RemoveWebHook(repoUrl, accessToken, hookUrl);
-            var getRository = GetRepository(repoUrl, accessToken);
-
-            await Task.WhenAll((Task)removeWebHook, getRository);
-
-            var repository = getRository.Result;
             var hook = new TfsWebHookInfo();
             hook.eventType = "git.push";
-            hook.consumerActionId = "httpRequest";
-            hook.consumerId = "webHooks";
+            hook.consumerActionId = "deployWebApp";
+            hook.consumerId = "azureAppService";
             hook.consumerInputs = new TfsConsumerInputs();
             hook.consumerInputs.url = String.Format("{0}://{1}{2}", hookUri.Scheme, hookUri.Authority, hookUri.PathAndQuery);
 
@@ -229,6 +275,7 @@ namespace AzureSourceControls
             hook.publisherInputs.projectId = repository.project.id;
             hook.publisherInputs.repository = repository.id;
 
+            var repoUri = new Uri(repository.url);
             var requestUri = String.Format("{0}://{1}/DefaultCollection/_apis/hooks/subscriptions?api-version={2}", repoUri.Scheme, repoUri.Authority, ApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
@@ -239,13 +286,51 @@ namespace AzureSourceControls
             }
         }
 
-        public async Task<bool> RemoveWebHook(string repoUrl, string accessToken, string hookUrl)
+        public async Task<bool> TestWebHook(string accessToken, TfsRepositoryInfo repository, string hookUrl)
         {
-            CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
+            CommonUtils.ValidateNullArgument("repository", repository);
             CommonUtils.ValidateNullArgument("hookUrl", hookUrl);
 
-            var hook = await GetWebHookInfo(repoUrl, accessToken, hookUrl);
+            var hook = await GetWebHookInfo(accessToken, repository, hookUrl);
+            if (hook == null)
+            {
+                throw new InvalidOperationException("Vso TestWebHook: no hook found for " + repository.RepoUrl);
+            }
+
+            var hookUri = new Uri(hookUrl);
+            var test = new TfsTestHookInfo();
+            test.subscriptionId = hook.id;
+            test.details = new TfsTestHookDetails();
+            test.details.eventType = "git.push";
+            test.details.consumerActionId = "deployWebApp";
+            test.details.consumerId = "azureAppService";
+            test.details.publisherId = "tfs";
+
+            var creds = String.IsNullOrEmpty(hookUri.UserInfo) ? new string[0] : hookUri.UserInfo.Split(':');
+            test.details.consumerInputs = new TfsConsumerInputs();
+            test.details.consumerInputs.url = String.Format("{0}://{1}{2}", hookUri.Scheme, hookUri.Authority, hookUri.PathAndQuery);
+            test.details.consumerInputs.basicAuthUsername = creds.Length > 0 ? creds[0] : null;
+            test.details.consumerInputs.basicAuthPassword = creds.Length > 1 ? creds[1] : null;
+
+            var repoUri = new Uri(repository.url);
+            var requestUri = String.Format("{0}://{1}/DefaultCollection/_apis/hooks/testNotifications?api-version={2}", repoUri.Scheme, repoUri.Authority, ApiVersion);
+            using (var client = CreateTfsClient(accessToken))
+            {
+                using (var response = await client.PostAsJsonAsync(requestUri, test))
+                {
+                    return await ProcessEmptyResponse("TestWebHook", response);
+                }
+            }
+        }
+
+        public async Task<bool> RemoveWebHook(string accessToken, TfsRepositoryInfo repository, string hookUrl)
+        {
+            CommonUtils.ValidateNullArgument("accessToken", accessToken);
+            CommonUtils.ValidateNullArgument("repository", repository);
+            CommonUtils.ValidateNullArgument("hookUrl", hookUrl);
+
+            var hook = await GetWebHookInfo(accessToken, repository, hookUrl);
             if (hook == null)
             {
                 return false;
@@ -261,44 +346,11 @@ namespace AzureSourceControls
             }
         }
 
-        private async Task<TfsWebHookInfo> GetWebHookInfo(string repoUrl, string accessToken, string hookUrl)
+        private async Task<TfsWebHookInfo> GetWebHookInfo(string accessToken, TfsRepositoryInfo repository, string hookUrl)
         {
+            var hooks = await ListWebHooks(accessToken, repository);
             var hookUri = new Uri(hookUrl);
-            var repoUri = new Uri(repoUrl);
-
-            var listWebHooks = ListWebHooks(repoUrl, accessToken);
-            var getRository = GetRepository(repoUrl, accessToken);
-
-            await Task.WhenAll((Task)listWebHooks, getRository);
-
-            var hooks = listWebHooks.Result;
-            var repository = getRository.Result;
-
-            return hooks.FirstOrDefault(hook =>
-            {
-                if (repository.project != null && hook.publisherInputs != null && hook.consumerInputs != null && hook.consumerInputs.url != null)
-                {
-                    return String.Equals(repository.id, hook.publisherInputs.repository, StringComparison.OrdinalIgnoreCase)
-                        && String.Equals(repository.project.id, hook.publisherInputs.projectId, StringComparison.OrdinalIgnoreCase)
-                        && String.Equals(new Uri(hook.consumerInputs.url).Host, hookUri.Host, StringComparison.OrdinalIgnoreCase);
-                }
-
-                return false;
-            });
-        }
-
-        private async Task<TfsWebHookInfo[]> ListWebHooks(string repoUrl, string accessToken)
-        {
-            var repoUri = new Uri(repoUrl);
-            var requestUri = String.Format("{0}://{1}/DefaultCollection/_apis/hooks/subscriptions?api-version={2}", repoUri.Scheme, repoUri.Authority, ApiVersion);
-            using (var client = CreateTfsClient(accessToken))
-            {
-                using (var response = await client.GetAsync(requestUri))
-                {
-                    var hooks = await ProcessResponse<TfsResult<TfsWebHookInfo>>("GetWebHookInfo", response);
-                    return hooks.value;
-                }
-            }
+            return hooks.FirstOrDefault(hook => String.Equals(new Uri(hook.consumerInputs.url).Host, hookUri.Host, StringComparison.OrdinalIgnoreCase));
         }
 
         private async Task<T> ProcessResponse<T>(string operation, HttpResponseMessage response)
@@ -352,18 +404,22 @@ namespace AzureSourceControls
                 {
                     if (!String.IsNullOrEmpty(error.ErrorDescription))
                     {
-                        message = String.Format("Tfs {0}: {1}", operation, error.ErrorDescription);
+                        message = String.Format("Vso {0}: {1}", operation, error.ErrorDescription);
                     }
                     else if (!String.IsNullOrEmpty(error.Error))
                     {
-                        message = String.Format("Tfs {0}: {1}", operation, error.Error);
+                        message = String.Format("Vso {0}: {1}", operation, error.Error);
+                    }
+                    else if (!String.IsNullOrEmpty(error.Message))
+                    {
+                        message = String.Format("Vso {0}: {1}", operation, error.Message);
                     }
                 }
             }
 
             if (String.IsNullOrEmpty(message))
             {
-                message = String.Format("Tfs {0}: ({1}) {2}.", operation, (int)statusCode, statusCode);
+                message = String.Format("Vso {0}: ({1}) {2}.", operation, (int)statusCode, statusCode);
             }
 
             return new OAuthException(message, statusCode, content);
@@ -401,6 +457,32 @@ namespace AzureSourceControls
             public string repository { get; set; }
         }
 
+        public class TfsTestHookInfo
+        {
+            public string subscriptionId { get; set; }
+            public TfsTestHookDetails details { get; set; }
+        }
+
+        public class TfsTestHookDetails
+        {
+            public string consumerActionId { get; set; }
+            public string consumerId { get; set; }
+            public TfsConsumerInputs consumerInputs { get; set; }
+            public string publisherId { get; set; }
+            public string eventType { get; set; }
+        }
+
+        public class TfsProfileInfo
+        {
+            public string displayName { get; set; }
+            public string publicAlias { get; set; }
+            public string emailAddress { get; set; }
+            public int coreRevision { get; set; }
+            public string timeStamp { get; set; }
+            public string id { get; set; }
+            public int revision { get; set; }
+        }
+
         public class TfsAccountInfo
         {
             public string accountId { get; set; }
@@ -421,7 +503,7 @@ namespace AzureSourceControls
 
         public class TfsRepositoryInfo : TfsInfo
         {
-            public string RepoUrl { get { return url; } }
+            public string RepoUrl { get { return remoteUrl; } }
             public TfsInfo project { get; set; }
             public string defaultBranch { get; set; }
             public string remoteUrl { get; set; }
@@ -461,6 +543,7 @@ namespace AzureSourceControls
             // oauth error
             public string Error { get; set; }
             public string ErrorDescription { get; set; }
+            public string Message { get; set; }
         }
     }
 }

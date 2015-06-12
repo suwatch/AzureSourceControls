@@ -50,7 +50,7 @@
     <Compile Include="CodePlexProxy.cs" />
     <Compile Include="DropboxProxy.cs" />
     <Compile Include="GitHubProxy.cs" />
-    <Compile Include="TfsProxy.cs" />
+    <Compile Include="VsoProxy.cs" />
     <Compile Include="OAuthException.cs" />
     <Compile Include="OAuthV1Info.cs" />
     <Compile Include="OAuthV1Provider.cs" />

@@ -61,6 +61,8 @@ namespace AzureSourceControls.Utils
             var content = new StringContent(serializer.Serialize(value));
             content.Headers.ContentType = new MediaTypeHeaderValue(Constants.JsonMediaType);
 
+            Console.WriteLine(serializer.Serialize(value));
+
             return await client.PostAsync(requestUri, content);
         }
 
