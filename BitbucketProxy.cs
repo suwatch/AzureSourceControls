@@ -154,6 +154,7 @@ namespace AzureSourceControls
 
             await RemoveSSHKey(repoUrl, token, tokenSecret, sshKey);
 
+            // deploy key only allow read-only access
             var sshKeyInfo = new BitbucketSSHKeyInfo { label = title, key = sshKey };
             var requestUri = GetRequestUri(repoUrl, "deploy-keys");
             await _provider.PostAsJsonAsync("AddSSHKey", requestUri, token, tokenSecret, sshKeyInfo);

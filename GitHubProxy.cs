@@ -250,7 +250,8 @@ namespace AzureSourceControls
             // GitHub: Deploy keys are immutable. If you need to update a key, remove the key and create a new one instead.
             await RemoveSSHKey(repoUrl, accessToken, sshKey);
 
-            var sshKeyInfo = new GitHubSSHKeyInfo { title = title, key = sshKey };
+            // only need read-only access for deploy key
+            var sshKeyInfo = new GitHubSSHKeyInfo { title = title, key = sshKey, read_only = true };
             var requestUri = GetRequestUri(repoUrl, "keys");
             using (var client = CreateGitHubClient(accessToken))
             {
@@ -619,6 +620,7 @@ namespace AzureSourceControls
             public string id { get; set; }
             public string title { get; set; }
             public string key { get; set; }
+            public bool read_only { get; set; }
         }
 
         public class OAuthInfo
