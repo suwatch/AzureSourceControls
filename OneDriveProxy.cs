@@ -40,7 +40,7 @@ namespace AzureSourceControls
             {
                 strb.AppendFormat("&redirect_uri={0}", WebUtility.UrlEncode(redirectUri));
             }
-            strb.AppendFormat("&scope={0}", WebUtility.UrlEncode("onedrive.appfolder wl.basic wl.offline_access"));
+            strb.AppendFormat("&scope={0}", WebUtility.UrlEncode("onedrive.appfolder wl.basic wl.offline_access wl.emails"));
             strb.Append("&response_type=code");
             strb.AppendFormat("&state={0}", WebUtility.UrlEncode(state ?? String.Empty));
 
@@ -463,6 +463,7 @@ namespace AzureSourceControls
             public string gender { get; set; }
             public string locale { get; set; }
             public DateTime updated_time { get; set; }
+            public Dictionary<string, string> emails { get; set; }
         }
 
         public class OneDriveItemCollection
