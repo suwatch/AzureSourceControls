@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -17,6 +18,8 @@ namespace AzureSourceControls
     // to create application, https://account.live.com/developers/applications/index
     public class OneDriveProxy
     {
+        public const string OneDriveApiAppUriPrefix = @"https://api.onedrive.com/v1.0/drive/special/approot:/";
+
         private readonly string _clientId;
         private readonly string _clientSecret;
         private readonly Func<HttpClient> _httpClientFactory;
@@ -151,7 +154,7 @@ namespace AzureSourceControls
             }
         }
 
-        public async Task<bool> CreateFolder(string accessToken, string path)
+        public async Task<OneDriveItem> CreateFolder(string accessToken, string path)
         {
             const string payloadFormat = "{{\"name\":\"{0}\",\"folder\":{{}}}}";
 
@@ -164,13 +167,7 @@ namespace AzureSourceControls
             {
                 using (var response = await client.PostAsync(requestUri, content))
                 {
-                    if (response.StatusCode == HttpStatusCode.Conflict)
-                    {
-                        return false;
-                    }
-
-                    await ProcessResponse<OneDriveItem>("CreateFolder", response);
-                    return true;
+                    return await ProcessResponse<OneDriveItem>("CreateFolder", response);
                 }
             }
         }
@@ -180,7 +177,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
             CommonUtils.ValidateNullArgument("path", path);
 
-            var requestUri = String.Format("https://api.onedrive.com/v1.0/drive/special/approot:/{0}", path);
+            var requestUri = GetRequestUri(path);
             using (var client = CreateHttpClient(accessToken))
             {
                 using (var response = await client.GetAsync(requestUri))
@@ -190,12 +187,30 @@ namespace AzureSourceControls
             }
         }
 
+        public async Task<bool> IsFolderExisted(string accessToken, string path)
+        {
+            try
+            {
+                await GetFolder(accessToken, path);
+                return true;
+            }
+            catch (OAuthException oae)
+            {
+                if (oae.StatusCode == HttpStatusCode.NotFound)
+                {
+                    return false;
+                }
+
+                throw;
+            }
+        }
+
         public async Task<OneDriveItem> GetFile(string accessToken, string path)
         {
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
             CommonUtils.ValidateNullArgument("path", path);
 
-            var requestUri = String.Format("https://api.onedrive.com/v1.0/drive/special/approot:/{0}", path);
+            var requestUri = GetRequestUri(path);
             using (var client = CreateHttpClient(accessToken))
             {
                 using (var response = await client.GetAsync(requestUri))
@@ -210,8 +225,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
             CommonUtils.ValidateNullArgument("path", path);
 
-            //var requestUri = String.Format("https://api.onedrive.com/v1.0/drive/special/approot:/{0}:/content", path);
-            var requestUri = String.Format("https://api.onedrive.com/v1.0/drive/special/approot:/{0}", path);
+            var requestUri = GetRequestUri(path);
             requestUri = await GetItemUri(accessToken, requestUri) + "/content";
             using (var client = CreateHttpClient(accessToken))
             {
@@ -225,8 +239,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
             CommonUtils.ValidateNullArgument("path", path);
 
-            //var requestUri = String.Format("https://api.onedrive.com/v1.0/drive/special/approot:/{0}:/view.changes", path);
-            var requestUri = String.Format("https://api.onedrive.com/v1.0/drive/special/approot:/{0}", path);
+            var requestUri = GetRequestUri(path);
             requestUri = await GetItemUri(accessToken, requestUri) + "/view.changes";
 
             var result = new OneDriveChangeCollection();
@@ -359,7 +372,6 @@ namespace AzureSourceControls
         private async Task<T> ProcessResponse<T>(string operation, HttpResponseMessage response)
         {
             string content = await response.ReadContentAsync();
-            //Console.WriteLine("response:\r\n{0}", content.Replace("\r\n", "\n").Replace("\r", "\n"));
             if (response.IsSuccessStatusCode)
             {
                 return JsonUtils.Deserialize<T>(content);
@@ -493,6 +505,7 @@ namespace AzureSourceControls
 
             public Dictionary<string, object> deleted { get; set; }
             public OneDriveParentReference parentReference { get; set; }
+            public string repoUrl { get { return string.Format(CultureInfo.InvariantCulture, "{0}{1}", OneDriveApiAppUriPrefix, name); } }
         }
 
         public class OneDriveParentReference
@@ -564,6 +577,19 @@ namespace AzureSourceControls
             public bool IsDeleted { get; set; }
             public string ContentUri { get; set; }
             public DateTime LastModifiedUtc { get; set; }
+        }
+
+        private static string GetRequestUri(string path)
+        {
+            Uri uri;
+            if (Uri.TryCreate(path, UriKind.Absolute, out uri))
+            {
+                return path;
+            }
+            else
+            {
+                return string.Format(CultureInfo.InvariantCulture, "{0}{1}", OneDriveApiAppUriPrefix, path);
+            }
         }
     }
 }

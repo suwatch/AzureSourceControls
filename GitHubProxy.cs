@@ -306,8 +306,8 @@ namespace AzureSourceControls
             }
 
             return String.Equals(
-                src.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)[1], 
-                dst.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)[1]); 
+                src.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)[1],
+                dst.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)[1]);
         }
 
         private async Task<GitHubHookInfo> GetWebHookInfo(string repoUrl, string accessToken, string hookUrl)
