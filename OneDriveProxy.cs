@@ -154,6 +154,21 @@ namespace AzureSourceControls
             }
         }
 
+        public async Task<OneDriveItem> EnsureFolder(string accessToken, string path)
+        {
+            try
+            {
+                return await this.CreateFolder(accessToken, path);
+            }
+            catch (OAuthException oae)
+            {
+                if (oae.StatusCode != HttpStatusCode.Conflict)
+                    throw;
+            }
+
+            return await this.GetFolder(accessToken, path);
+        }
+
         public async Task<OneDriveItem> CreateFolder(string accessToken, string path)
         {
             const string payloadFormat = "{{\"name\":\"{0}\",\"folder\":{{}}}}";

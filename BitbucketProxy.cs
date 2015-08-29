@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -177,6 +178,19 @@ namespace AzureSourceControls
             return sshKeyInfo != null;
         }
 
+        public async Task<Privilege[]> GetPrivilege(string repoUrl, string userName, string token, string tokenSecret)
+        {
+            BitbucketRepoInfo repo = await this.GetRepository(repoUrl, token, tokenSecret);
+            string requestUri = string.Format(
+                CultureInfo.InvariantCulture,
+                @"https://api.bitbucket.org/1.0/privileges/{0}/{1}/{2}",
+                repo.owner,
+                repo.slug,
+                userName);
+
+            return await _provider.GetAsync<Privilege[]>("GetPrivilege", requestUri, token, tokenSecret);
+        }
+
         private async Task<BitbucketSSHKeyFullInfo> GetSSHKey(string repoUrl, string token, string tokenSecret, string sshKey)
         {
             var requestUri = GetRequestUri(repoUrl, "deploy-keys");
@@ -346,15 +360,15 @@ namespace AzureSourceControls
         {
             public string RepoUrl
             {
-                get 
+                get
                 {
                     if (String.Equals(scm, "hg", StringComparison.OrdinalIgnoreCase))
                     {
-                        return String.Format(is_private ? "ssh://hg@bitbucket.org/{0}/{1}" : "https://bitbucket.org/{0}/{1}", this.owner, this.slug); 
+                        return String.Format(is_private ? "ssh://hg@bitbucket.org/{0}/{1}" : "https://bitbucket.org/{0}/{1}", this.owner, this.slug);
                     }
                     else
                     {
-                        return String.Format(is_private ? "git@bitbucket.org:{0}/{1}.git" : "https://bitbucket.org/{0}/{1}.git", this.owner, this.slug); 
+                        return String.Format(is_private ? "git@bitbucket.org:{0}/{1}.git" : "https://bitbucket.org/{0}/{1}.git", this.owner, this.slug);
                     }
                 }
             }
@@ -381,5 +395,42 @@ namespace AzureSourceControls
             public string raw_node { get; set; }
             public string message { get; set; }
         }
+
+        public class Privilege
+        {
+            public string privilege { get; set; }
+            public string repo { get; set; }
+            public BitbucketAccountInfo user { get; set; }
+        }
+
+        #region V2 API
+        /// <summary>
+        /// List repo by role
+        /// </summary>
+        /// <param name="role">Can be "owner|admin|contributor|member"</param>
+        /// <param name="token"></param>
+        /// <param name="tokenSecret"></param>
+        /// <returns></returns>
+        public async Task<List<BitbucketV2Repository>> ListRepositoriesV2(string role, string token, string tokenSecret)
+        {
+            List<BitbucketV2Repository> repos = new List<BitbucketV2Repository>();
+            BitbucketV2Paging<BitbucketV2Repository> result = null;
+            string url = string.Format("https://api.bitbucket.org/2.0/repositories?role={0}", role);
+
+            do
+            {
+                result = await _provider.GetAsync<BitbucketV2Paging<BitbucketV2Repository>>(
+                    "ListRepositoriesV2",
+                    url,
+                    token,
+                    tokenSecret);
+
+                url = result.next;
+                repos.AddRange(result.values);
+            } while (url != null);
+
+            return repos;
+        }
+        #endregion
     }
 }
