@@ -2,7 +2,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // ----------------------------------------------------------------------------
 
-namespace AzureSourceControls.Utils
+namespace Microsoft.Web.Hosting.SourceControls.Utils
 {
     internal static class Constants
     {

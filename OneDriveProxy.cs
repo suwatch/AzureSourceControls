@@ -11,9 +11,9 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web;
-using AzureSourceControls.Utils;
+using Microsoft.Web.Hosting.SourceControls.Utils;
 
-namespace AzureSourceControls
+namespace Microsoft.Web.Hosting.SourceControls
 {
     // to create application, https://account.live.com/developers/applications/index
     public class OneDriveProxy
@@ -152,6 +152,21 @@ namespace AzureSourceControls
                     return items.value;
                 }
             }
+        }
+
+        public async Task<OneDriveItem> EnsureFolder(string accessToken, string path)
+        {
+            try
+            {
+                return await this.CreateFolder(accessToken, path);
+            }
+            catch (OAuthException oae)
+            {
+                if (oae.StatusCode != HttpStatusCode.Conflict)
+                    throw;
+            }
+
+            return await this.GetFolder(accessToken, path);
         }
 
         public async Task<OneDriveItem> CreateFolder(string accessToken, string path)

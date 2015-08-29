@@ -9,9 +9,9 @@ using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Web;
-using AzureSourceControls.Utils;
+using Microsoft.Web.Hosting.SourceControls.Utils;
 
-namespace AzureSourceControls
+namespace Microsoft.Web.Hosting.SourceControls
 {
     public class DropboxProxy
     {

@@ -11,9 +11,9 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web;
-using AzureSourceControls.Utils;
+using Microsoft.Web.Hosting.SourceControls.Utils;
 
-namespace AzureSourceControls
+namespace Microsoft.Web.Hosting.SourceControls
 {
     public class GitHubProxy
     {
@@ -123,7 +123,6 @@ namespace AzureSourceControls
         public async Task<GitHubRepoInfo> GetRepository(string repoUrl, string accessToken)
         {
             CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
-            CommonUtils.ValidateNullArgument("accessToken", accessToken);
 
             var requestUri = GetRequestUri(repoUrl);
             using (var client = CreateGitHubClient(accessToken))
@@ -147,6 +146,27 @@ namespace AzureSourceControls
                 {
                     return await ProcessResponse<IEnumerable<GitHubBranchInfo>>("ListBranches", response);
                 }
+            }
+        }
+
+        public async Task<StreamContent> DownloadFile(string repoUrl, string path, string accessToken, string branch = "master")
+        {
+            CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
+            CommonUtils.ValidateNullArgument("path", path);
+            CommonUtils.ValidateNullArgument("branch", branch);
+
+            var requestUri = String.Format("{0}?ref={1}", GetRequestUri(repoUrl, "contents", path), branch);
+            using (var client = CreateGitHubClient(accessToken))
+            {
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github.v3.raw"));
+                var response = await client.GetAsync(requestUri);
+                if (response.IsSuccessStatusCode)
+                {
+                    return (StreamContent)response.Content;
+                }
+
+                throw CreateOAuthException("DownloadFile", String.Empty, response.StatusCode);
             }
         }
 
@@ -460,7 +480,10 @@ namespace AzureSourceControls
         private HttpClient CreateGitHubClient(string accessToken)
         {
             HttpClient client = CreateHttpClient();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("token", accessToken);
+            if (!String.IsNullOrEmpty(accessToken))
+            {
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("token", accessToken);
+            }
             return client;
         }
 

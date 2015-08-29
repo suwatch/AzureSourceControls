@@ -4,15 +4,16 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web;
-using AzureSourceControls.Utils;
+using Microsoft.Web.Hosting.SourceControls.Utils;
 
-namespace AzureSourceControls
+namespace Microsoft.Web.Hosting.SourceControls
 {
     public class BitbucketProxy
     {
@@ -68,13 +69,33 @@ namespace AzureSourceControls
             return user.user;
         }
 
-        public async Task<IEnumerable<BitbucketRepoInfo>> ListRepositories(string token, string tokenSecret)
+        public async Task<List<BitbucketRepoInfo>> ListRepositories(string token, string tokenSecret, string role = "admin")
         {
-            CommonUtils.ValidateNullArgument("token", token);
-            CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
+            var repos = new List<BitbucketV2Proxy.BitbucketV2Repository>();
+            string url = string.Format("https://api.bitbucket.org/2.0/repositories?role={0}", role);
 
-            return await _provider.GetAsync<BitbucketRepoInfo[]>("ListRepositories", "https://api.bitbucket.org/1.0/user/repositories/", token, tokenSecret);
+            do
+            {
+                var result = await _provider.GetAsync<BitbucketV2Proxy.BitbucketV2Paging<BitbucketV2Proxy.BitbucketV2Repository>>(
+                    "ListRepositories",
+                    url,
+                    token,
+                    tokenSecret);
+
+                url = result.next;
+                repos.AddRange(result.values);
+            } while (url != null);
+
+            return repos.Select(r => r.ToRepoInfo()).ToList();
         }
+
+        // Deprecated due to better V2 api
+        //public async Task<IEnumerable<BitbucketRepoInfo>> ListRepositories(string token, string tokenSecret)
+        //{
+        //    CommonUtils.ValidateNullArgument("token", token);
+        //    CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
+        //    return await _provider.GetAsync<BitbucketRepoInfo[]>("ListRepositories", "https://api.bitbucket.org/1.0/user/repositories/", token, tokenSecret);
+        //}
 
         public async Task<BitbucketRepoInfo> GetRepository(string repoUrl, string token, string tokenSecret)
         {
@@ -101,6 +122,18 @@ namespace AzureSourceControls
             });
         }
 
+        public async Task<StreamContent> DownloadFile(string repoUrl, string path, string token, string tokenSecret, string branch = "master")
+        {
+            CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
+            CommonUtils.ValidateNullArgument("path", path);
+            CommonUtils.ValidateNullArgument("token", token);
+            CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
+            CommonUtils.ValidateNullArgument("branch", branch);
+
+            var requestUri = String.Format("{0}/{1}/{2}", GetRequestUri(repoUrl, "raw"), branch, path);
+            return await _provider.GetStreamAsync("DownloadFile", requestUri, token, tokenSecret);
+        }
+
         public async Task AddWebHook(string repoUrl, string token, string tokenSecret, string hookUrl)
         {
             CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
@@ -117,13 +150,13 @@ namespace AzureSourceControls
                 }
 
                 var requestUri = GetRequestUri(repoUrl, "services", hook.id);
-                await _provider.PutAsJsonAsync("AddWebHook", requestUri, token, tokenSecret, new CreateBitbucketHookInfo(hookUrl));
+                await _provider.PutAsJsonAsync("UpdateWebHook", requestUri, token, tokenSecret, new CreateBitbucketHookInfo(hookUrl));
             }
             else
             {
                 var requestUri = GetRequestUri(repoUrl, "services");
                 var content = new StringContent(String.Format("type=POST;URL={0}", hookUrl), Encoding.UTF8, "application/text");
-                await _provider.PostAsync("UpdateWebHook", requestUri, token, tokenSecret, content);
+                await _provider.PostAsync("AddWebHook", requestUri, token, tokenSecret, content);
             }
         }
 
@@ -184,7 +217,7 @@ namespace AzureSourceControls
             return sshKeys.FirstOrDefault(info => SSHKeyEquals(info.key, sshKey));
         }
 
-        private bool SSHKeyEquals(string src, string dst)
+        internal static bool SSHKeyEquals(string src, string dst)
         {
             if (!src.StartsWith(SSHPrefix) || src.Length <= SSHPrefix.Length ||
                 !dst.StartsWith(SSHPrefix) || dst.Length <= SSHPrefix.Length)
@@ -218,7 +251,7 @@ namespace AzureSourceControls
             });
         }
 
-        static private string GetRequestUri(string repoUrl, params string[] paths)
+        static internal string GetRequestUri(string repoUrl, params string[] paths)
         {
             // repoId is the clone (https or ssh) url
             var parts = repoUrl.Split(new[] { ':', '/' }, StringSplitOptions.RemoveEmptyEntries);
@@ -346,15 +379,15 @@ namespace AzureSourceControls
         {
             public string RepoUrl
             {
-                get 
+                get
                 {
                     if (String.Equals(scm, "hg", StringComparison.OrdinalIgnoreCase))
                     {
-                        return String.Format(is_private ? "ssh://hg@bitbucket.org/{0}/{1}" : "https://bitbucket.org/{0}/{1}", this.owner, this.slug); 
+                        return String.Format(is_private ? "ssh://hg@bitbucket.org/{0}/{1}" : "https://bitbucket.org/{0}/{1}", this.owner, this.slug);
                     }
                     else
                     {
-                        return String.Format(is_private ? "git@bitbucket.org:{0}/{1}.git" : "https://bitbucket.org/{0}/{1}.git", this.owner, this.slug); 
+                        return String.Format(is_private ? "git@bitbucket.org:{0}/{1}.git" : "https://bitbucket.org/{0}/{1}.git", this.owner, this.slug);
                     }
                 }
             }

@@ -9,5 +9,5 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 
 [assembly: CLSCompliant(true)]
-[assembly: AssemblyDescription("AzureSourceControls 1.0")]
-[assembly: AssemblyTitle("AzureSourceControls 1.0")]
+[assembly: AssemblyDescription("Web Hosting SourceControls 1.0")]
+[assembly: AssemblyTitle("Web Hosting SourceControls 1.0")]

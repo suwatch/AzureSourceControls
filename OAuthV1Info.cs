@@ -4,7 +4,7 @@
 
 using System;
 
-namespace AzureSourceControls
+namespace Microsoft.Web.Hosting.SourceControls
 {
     public class OAuthV1Info
     {

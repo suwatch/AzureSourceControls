@@ -5,7 +5,7 @@
 using System;
 using System.Net;
 
-namespace AzureSourceControls
+namespace Microsoft.Web.Hosting.SourceControls
 {
     public class OAuthException : Exception
     {

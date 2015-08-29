@@ -8,7 +8,7 @@ using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 
-namespace AzureSourceControls.Utils
+namespace Microsoft.Web.Hosting.SourceControls.Utils
 {
     internal static class JsonUtils
     {
@@ -60,8 +60,6 @@ namespace AzureSourceControls.Utils
             var serializer = JsonUtils.CreateJsonSerializer();
             var content = new StringContent(serializer.Serialize(value));
             content.Headers.ContentType = new MediaTypeHeaderValue(Constants.JsonMediaType);
-
-            Console.WriteLine(serializer.Serialize(value));
 
             return await client.PostAsync(requestUri, content);
         }

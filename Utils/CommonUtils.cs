@@ -8,7 +8,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace AzureSourceControls.Utils
+namespace Microsoft.Web.Hosting.SourceControls.Utils
 {
     public static class CommonUtils
     {

@@ -11,9 +11,9 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web;
-using AzureSourceControls.Utils;
+using Microsoft.Web.Hosting.SourceControls.Utils;
 
-namespace AzureSourceControls
+namespace Microsoft.Web.Hosting.SourceControls
 {
     public class VsoProxy
     {
@@ -35,7 +35,7 @@ namespace AzureSourceControls
             CommonUtils.ValidateNullArgument("_clientId", _clientId);
 
             const string response_type = "Assertion";
-            const string scope = "preview_api_all preview_msdn_licensing";
+            const string scope = "vso.code";
 
             StringBuilder strb = new StringBuilder();
             strb.Append("https://app.vssps.visualstudio.com/oauth2/authorize");

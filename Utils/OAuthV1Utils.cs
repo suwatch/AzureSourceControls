@@ -11,7 +11,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace AzureSourceControls.Utils
+namespace Microsoft.Web.Hosting.SourceControls.Utils
 {
     internal static class OAuthV1Utils
     {

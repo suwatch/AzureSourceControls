@@ -9,9 +9,9 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web;
-using AzureSourceControls.Utils;
+using Microsoft.Web.Hosting.SourceControls.Utils;
 
-namespace AzureSourceControls
+namespace Microsoft.Web.Hosting.SourceControls
 {
     public abstract class OAuthV1Provider
     {
@@ -142,6 +142,28 @@ namespace AzureSourceControls
 
                     return new OAuthV1Info(null, token, tokenSecret);
                 }
+            }
+        }
+
+        public virtual async Task<StreamContent> GetStreamAsync(string operation, string requestUri, string token, string tokenSecret)
+        {
+            using (HttpClient client = CreateHttpClient())
+            {
+                client.DefaultRequestHeaders.Authorization = OAuthV1Utils.GetOAuthHeader(
+                    _clientId,
+                    _clientSecret,
+                    HttpMethod.Get,
+                    requestUri,
+                    token: token,
+                    tokenSecret: tokenSecret);
+
+                var response = await client.GetAsync(requestUri);
+                if (response.IsSuccessStatusCode)
+                {
+                    return (StreamContent)response.Content;
+                }
+
+                throw new OAuthException(String.Format("{0} {1}: {2}", Name, operation, GetErrorMessage(null, response.StatusCode)), response.StatusCode, String.Empty);
             }
         }
 
