@@ -172,22 +172,18 @@ namespace Microsoft.Web.Hosting.SourceControls
             }
         }
 
-        public async Task<IEnumerable<BitbucketProxy.BitbucketBranchInfo>> ListBranches(string repoUrl, string accessToken)
+        public async Task<BitbucketProxy.BitbucketBranchInfo[]> ListBranches(string repoUrl, string accessToken)
         {
             CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
 
-            var requestUri = BitbucketProxy.GetRequestUri(repoUrl, "branches");
+            var requestUri = BitbucketProxy.GetRequestUri(repoUrl, "branches-tags");
             using (var client = CreateHttpClient(accessToken))
             {
                 using (var response = await client.GetAsync(requestUri))
                 {
-                    var branches = await this.ProcessResponse<Dictionary<string, BitbucketProxy.BitbucketBranchInfo>>("ListBranches", response);
-                    return branches.Select(p =>
-                    {
-                        p.Value.name = p.Key;
-                        return p.Value;
-                    });
+                    var info = await this.ProcessResponse<BitbucketProxy.BitbucketBranchesTagsInfo>("ListBranches", response);
+                    return info.branches;
                 }
             }
         }

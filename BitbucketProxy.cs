@@ -107,19 +107,15 @@ namespace Microsoft.Web.Hosting.SourceControls
             return await _provider.GetAsync<BitbucketRepoInfo>("GetRepository", requestUri, token, tokenSecret);
         }
 
-        public async Task<IEnumerable<BitbucketBranchInfo>> ListBranches(string repoUrl, string token, string tokenSecret)
+        public async Task<BitbucketBranchInfo[]> ListBranches(string repoUrl, string token, string tokenSecret)
         {
             CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
             CommonUtils.ValidateNullArgument("token", token);
             CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
 
-            var requestUri = GetRequestUri(repoUrl, "branches");
-            var branches = await _provider.GetAsync<Dictionary<string, BitbucketBranchInfo>>("ListBranches", requestUri, token, tokenSecret);
-            return branches.Select(p =>
-            {
-                p.Value.name = p.Key;
-                return p.Value;
-            });
+            var requestUri = GetRequestUri(repoUrl, "branches-tags");
+            var info = await _provider.GetAsync<BitbucketProxy.BitbucketBranchesTagsInfo>("ListBranches", requestUri, token, tokenSecret);
+            return info.branches;
         }
 
         public async Task<StreamContent> DownloadFile(string repoUrl, string path, string token, string tokenSecret, string branch = "master")
@@ -408,11 +404,16 @@ namespace Microsoft.Web.Hosting.SourceControls
             }
         }
 
+        public class BitbucketBranchesTagsInfo
+        {
+            public BitbucketBranchInfo[] branches { get; set; }
+        }
+
         public class BitbucketBranchInfo
         {
             public string name { get; set; }
-            public string raw_node { get; set; }
-            public string message { get; set; }
+            public string changeset { get; set; }
+            public bool mainbranch { get; set; }
         }
     }
 }
