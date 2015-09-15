@@ -25,9 +25,30 @@ namespace Microsoft.Web.Hosting.SourceControls
 
         public VsoProxy(string clientId = null, string clientSecret = null, Func<HttpClient> httpClientFactory = null)
         {
+            ApiUri = "https://app.vssps.visualstudio.com";
+            AccountSuffix = "visualstudio.com";
+
             _clientId = clientId;
             _clientSecret = clientSecret;
             _httpClientFactory = httpClientFactory;
+        }
+
+        public string ApiUri
+        {
+            get;
+            set;
+        }
+
+        public string AccountSuffix
+        {
+            get;
+            set;
+        }
+
+        public string TFSImpersonate 
+        { 
+            get; 
+            set; 
         }
 
         public string GetOAuthUri(string state = null, string redirectUri = null)
@@ -38,7 +59,7 @@ namespace Microsoft.Web.Hosting.SourceControls
             const string scope = "vso.code";
 
             StringBuilder strb = new StringBuilder();
-            strb.Append("https://app.vssps.visualstudio.com/oauth2/authorize");
+            strb.AppendFormat("{0}/oauth2/authorize", ApiUri);
             strb.AppendFormat("?client_id={0}", WebUtility.UrlEncode(_clientId));
             strb.AppendFormat("&scope={0}", WebUtility.UrlEncode(scope));
             strb.AppendFormat("&response_type={0}", WebUtility.UrlEncode(response_type));
@@ -81,9 +102,10 @@ namespace Microsoft.Web.Hosting.SourceControls
             var content = new StringContent(GeneratePostData(redirectUri, code: code));
             content.Headers.ContentType = new MediaTypeHeaderValue(Constants.FormUrlEncodedMediaType);
 
+            var requestUri = String.Format("{0}/oauth2/token", ApiUri);
             using (var client = CreateHttpClient())
             {
-                using (var response = await client.PostAsync("https://app.vssps.visualstudio.com/oauth2/token", content))
+                using (var response = await client.PostAsync(requestUri, content))
                 {
                     return await ProcessResponse<OAuthInfo>("Authorize", response);
                 }
@@ -101,9 +123,10 @@ namespace Microsoft.Web.Hosting.SourceControls
             var content = new StringContent(GeneratePostData(redirectUri, refreshToken: refreshToken));
             content.Headers.ContentType = new MediaTypeHeaderValue(Constants.FormUrlEncodedMediaType);
 
+            var requestUri = String.Format("{0}/oauth2/token", ApiUri);
             using (var client = CreateHttpClient())
             {
-                using (var response = await client.PostAsync("https://app.vssps.visualstudio.com/oauth2/token", content))
+                using (var response = await client.PostAsync(requestUri, content))
                 {
                     return await ProcessResponse<OAuthInfo>("RefreshToken", response);
                 }
@@ -133,7 +156,7 @@ namespace Microsoft.Web.Hosting.SourceControls
         {
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
 
-            var requestUri = String.Format("https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version={0}", ApiVersion);
+            var requestUri = String.Format("{0}/_apis/profile/profiles/me?api-version={1}", ApiUri, ApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
                 using (var response = await client.GetAsync(requestUri))
@@ -154,7 +177,7 @@ namespace Microsoft.Web.Hosting.SourceControls
                 profileId = profile.id;
             }
 
-            var requestUri = String.Format("https://app.vssps.visualstudio.com/_apis/accounts?ownerId={0}&api-version={1}", profileId, ApiVersion);
+            var requestUri = String.Format("{0}/_apis/accounts?ownerId={1}&api-version={2}", ApiUri, profileId, ApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
                 using (var response = await client.GetAsync(requestUri))
@@ -182,7 +205,7 @@ namespace Microsoft.Web.Hosting.SourceControls
                 return results.SelectMany(r => r).ToArray();
             }
 
-            var requestUri = String.Format("https://{0}.VisualStudio.com/DefaultCollection/_apis/git/repositories?api-version={1}", accountName, ApiVersion);
+            var requestUri = String.Format("https://{0}.{1}/DefaultCollection/_apis/git/repositories?api-version={2}", accountName, AccountSuffix, ApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
                 using (var response = await client.GetAsync(requestUri))
@@ -377,8 +400,13 @@ namespace Microsoft.Web.Hosting.SourceControls
 
         private HttpClient CreateTfsClient(string accessToken)
         {
-            HttpClient client = CreateHttpClient();
+            var client = CreateHttpClient();
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            if (!String.IsNullOrEmpty(TFSImpersonate))
+            {
+                client.DefaultRequestHeaders.Add("X-TFS-Impersonate", "Microsoft.IdentityModel.Claims.ClaimsIdentity;" + TFSImpersonate);
+            }
+            client.DefaultRequestHeaders.Add("X-TFS-FedAuthRedirect", "Suppress");
             return client;
         }
 
