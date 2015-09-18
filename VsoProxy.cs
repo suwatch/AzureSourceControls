@@ -17,32 +17,36 @@ namespace Microsoft.Web.Hosting.SourceControls
 {
     public class VsoProxy
     {
-        private const string ApiVersion = "1.0";
+        private const string VsoApiVersion = "1.0";
+        private const string VsoApiUri = "https://app.vssps.visualstudio.com";
+        private const string VsoAccountSuffix = "visualstudio.com";
 
         private readonly string _clientId;
         private readonly string _clientSecret;
         private readonly Func<HttpClient> _httpClientFactory;
 
+        private string _apiUri;
+        private string _accountSuffix;
+
         public VsoProxy(string clientId = null, string clientSecret = null, Func<HttpClient> httpClientFactory = null)
         {
-            ApiUri = "https://app.vssps.visualstudio.com";
-            AccountSuffix = "visualstudio.com";
-
             _clientId = clientId;
             _clientSecret = clientSecret;
+            _apiUri = VsoApiUri;
+            _accountSuffix = VsoAccountSuffix;
             _httpClientFactory = httpClientFactory;
         }
 
         public string ApiUri
         {
-            get;
-            set;
+            get { return String.IsNullOrEmpty(_apiUri) ? VsoApiUri : _apiUri; }
+            set { _apiUri = value; }
         }
 
         public string AccountSuffix
         {
-            get;
-            set;
+            get { return String.IsNullOrEmpty(_accountSuffix) ? VsoAccountSuffix : _accountSuffix; }
+            set { _accountSuffix = value; }
         }
 
         public string TFSImpersonate 
@@ -156,7 +160,7 @@ namespace Microsoft.Web.Hosting.SourceControls
         {
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
 
-            var requestUri = String.Format("{0}/_apis/profile/profiles/me?api-version={1}", ApiUri, ApiVersion);
+            var requestUri = String.Format("{0}/_apis/profile/profiles/me?api-version={1}", ApiUri, VsoApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
                 using (var response = await client.GetAsync(requestUri))
@@ -177,7 +181,7 @@ namespace Microsoft.Web.Hosting.SourceControls
                 profileId = profile.id;
             }
 
-            var requestUri = String.Format("{0}/_apis/accounts?ownerId={1}&api-version={2}", ApiUri, profileId, ApiVersion);
+            var requestUri = String.Format("{0}/_apis/accounts?ownerId={1}&api-version={2}", ApiUri, profileId, VsoApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
                 using (var response = await client.GetAsync(requestUri))
@@ -205,7 +209,7 @@ namespace Microsoft.Web.Hosting.SourceControls
                 return results.SelectMany(r => r).ToArray();
             }
 
-            var requestUri = String.Format("https://{0}.{1}/DefaultCollection/_apis/git/repositories?api-version={2}", accountName, AccountSuffix, ApiVersion);
+            var requestUri = String.Format("https://{0}.{1}/DefaultCollection/_apis/git/repositories?api-version={2}", accountName, AccountSuffix, VsoApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
                 using (var response = await client.GetAsync(requestUri))
@@ -221,7 +225,8 @@ namespace Microsoft.Web.Hosting.SourceControls
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
             CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
 
-            var repositories = await ListRepositories(accessToken);
+            var accountName = new Uri(repoUrl).Host.Split('.')[0];
+            var repositories = await ListRepositories(accessToken, accountName);
             var repository = repositories.FirstOrDefault(r => String.Equals(r.RepoUrl, repoUrl));
             if (repository == null)
             {
@@ -236,7 +241,7 @@ namespace Microsoft.Web.Hosting.SourceControls
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
             CommonUtils.ValidateNullArgument("repository", repository);
 
-            var requestUri = String.Format("{0}/refs?api-version={1}", repository.url, ApiVersion);
+            var requestUri = String.Format("{0}/refs?api-version={1}", repository.url, VsoApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
                 using (var response = await client.GetAsync(requestUri))
@@ -253,7 +258,7 @@ namespace Microsoft.Web.Hosting.SourceControls
             CommonUtils.ValidateNullArgument("repository", repository);
 
             var url = new Uri(repository.url);
-            var requestUri = String.Format("{0}://{1}/DefaultCollection/_apis/hooks/subscriptions?api-version={2}", url.Scheme, url.Authority, ApiVersion);
+            var requestUri = String.Format("{0}://{1}/DefaultCollection/_apis/hooks/subscriptions?api-version={2}", url.Scheme, url.Authority, VsoApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
                 using (var response = await client.GetAsync(requestUri))
@@ -299,7 +304,7 @@ namespace Microsoft.Web.Hosting.SourceControls
             hook.publisherInputs.repository = repository.id;
 
             var repoUri = new Uri(repository.url);
-            var requestUri = String.Format("{0}://{1}/DefaultCollection/_apis/hooks/subscriptions?api-version={2}", repoUri.Scheme, repoUri.Authority, ApiVersion);
+            var requestUri = String.Format("{0}://{1}/DefaultCollection/_apis/hooks/subscriptions?api-version={2}", repoUri.Scheme, repoUri.Authority, VsoApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
                 using (var response = await client.PostAsJsonAsync(requestUri, hook))
@@ -337,7 +342,7 @@ namespace Microsoft.Web.Hosting.SourceControls
             test.details.consumerInputs.basicAuthPassword = creds.Length > 1 ? creds[1] : null;
 
             var repoUri = new Uri(repository.url);
-            var requestUri = String.Format("{0}://{1}/DefaultCollection/_apis/hooks/testNotifications?api-version={2}", repoUri.Scheme, repoUri.Authority, ApiVersion);
+            var requestUri = String.Format("{0}://{1}/DefaultCollection/_apis/hooks/testNotifications?api-version={2}", repoUri.Scheme, repoUri.Authority, VsoApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
                 using (var response = await client.PostAsJsonAsync(requestUri, test))
@@ -359,7 +364,7 @@ namespace Microsoft.Web.Hosting.SourceControls
                 return false;
             }
 
-            var requestUri = String.Format("{0}?api-version={1}", hook.url, ApiVersion);
+            var requestUri = String.Format("{0}?api-version={1}", hook.url, VsoApiVersion);
             using (var client = CreateTfsClient(accessToken))
             {
                 using (var response = await client.DeleteAsync(requestUri))
