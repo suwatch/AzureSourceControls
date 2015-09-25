@@ -202,6 +202,22 @@ namespace Microsoft.Web.Hosting.SourceControls
             }
         }
 
+        public async Task<OneDriveItem> UploadFile(string accessToken, string path, HttpContent content)
+        {
+            CommonUtils.ValidateNullArgument("accessToken", accessToken);
+            CommonUtils.ValidateNullArgument("path", path);
+            CommonUtils.ValidateNullArgument("content", content);
+
+            var requestUri = GetRequestUri(path) + ":/content";
+            using (var client = CreateHttpClient(accessToken))
+            {
+                using (var response = await client.PutAsync(requestUri, content))
+                {
+                    return await ProcessResponse<OneDriveItem>("UploadFile", response);
+                }
+            }
+        }
+
         public async Task<bool> IsFolderExisted(string accessToken, string path)
         {
             try

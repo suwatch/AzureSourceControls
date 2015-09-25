@@ -89,6 +89,16 @@ namespace Microsoft.Web.Hosting.SourceControls
             return false;
         }
 
+        public async Task<StreamContent> GetFileContent(string token, string tokenSecret, string path)
+        {
+            CommonUtils.ValidateNullArgument("token", token);
+            CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
+            CommonUtils.ValidateNullArgument("path", path);
+
+            var requestUri = String.Format("https://api-content.dropbox.com/1/files/sandbox/{0}", path.Trim('/'));
+            return await _provider.GetStreamAsync("GetFile", requestUri, token, tokenSecret);
+        }
+
         private bool FolderExists(IEnumerable<string> folders, string path)
         {
             folders = folders.Select(folder => '/' + folder.Trim('/').Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries).Last());
