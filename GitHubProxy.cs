@@ -396,7 +396,7 @@ namespace Microsoft.Web.Hosting.SourceControls
             StringBuilder strb = new StringBuilder();
             if (orgLogin == null)
             {
-                strb.Append("https://api.github.com/user/repos");
+                strb.Append("https://api.github.com/user/repos?type=owner");
             }
             else
             {
