@@ -49,10 +49,19 @@ namespace Microsoft.Web.Hosting.SourceControls
             set { _accountSuffix = value; }
         }
 
-        public string TFSImpersonate 
-        { 
-            get; 
-            set; 
+        // X-TFS-Impersonate
+        public string TFSImpersonate
+        {
+            get;
+            set;
+        }
+
+        // X-VSS-ForceMsaPassThrough
+        // If ARM token, you must set to true for non-AAD-backed MSA.
+        public bool ForceMsaPassThrough
+        {
+            get;
+            set;
         }
 
         public string GetOAuthUri(string state = null, string redirectUri = null)
@@ -188,6 +197,21 @@ namespace Microsoft.Web.Hosting.SourceControls
                 {
                     var result = await ProcessResponse<TfsResult<TfsAccountInfo>>("ListAccounts", response);
                     return result.value;
+                }
+            }
+        }
+
+        public async Task<TfsAccountInfo> GetAccount(string accessToken, string accountName)
+        {
+            CommonUtils.ValidateNullArgument("accessToken", accessToken);
+            CommonUtils.ValidateNullArgument("accountName", accountName);
+
+            var requestUri = String.Format("{0}/_apis/accounts/{1}?api-version={2}", ApiUri, accountName, VsoApiVersion);
+            using (var client = CreateTfsClient(accessToken))
+            {
+                using (var response = await client.GetAsync(requestUri))
+                {
+                    return await ProcessResponse<TfsAccountInfo>(String.Format("GetAccount({0})", TFSImpersonate), response);
                 }
             }
         }
@@ -410,6 +434,10 @@ namespace Microsoft.Web.Hosting.SourceControls
             if (!String.IsNullOrEmpty(TFSImpersonate))
             {
                 client.DefaultRequestHeaders.Add("X-TFS-Impersonate", "Microsoft.IdentityModel.Claims.ClaimsIdentity;" + TFSImpersonate);
+            }
+            else if (ForceMsaPassThrough)
+            {
+                client.DefaultRequestHeaders.Add("X-VSS-ForceMsaPassThrough", "true");
             }
             client.DefaultRequestHeaders.Add("X-TFS-FedAuthRedirect", "Suppress");
             return client;
