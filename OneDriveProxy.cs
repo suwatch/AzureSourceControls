@@ -505,7 +505,7 @@ namespace Microsoft.Web.Hosting.SourceControls
             public string link { get; set; }
             public string gender { get; set; }
             public string locale { get; set; }
-            public DateTime updated_time { get; set; }
+            public DateTime? updated_time { get; set; }
             public LiveEmailInfo emails { get; set; }
         }
 
