@@ -14,6 +14,8 @@ namespace Microsoft.Web.Hosting.SourceControls
 {
     public class BitbucketV2Proxy
     {
+        private const string ApiBaseUrl = " https://api.bitbucket.org/2.0";
+        private const string APiV1BaseUrl = "https://api.bitbucket.org/1.0";
         private readonly string _clientId;
         private readonly string _clientSecret;
         private readonly Func<HttpClient> _httpClientFactory;
@@ -124,14 +126,30 @@ namespace Microsoft.Web.Hosting.SourceControls
         {
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
 
-            var requestUri = "https://api.bitbucket.org/1.0/user/";
+            var userEndpoint = string.Format(CultureInfo.InvariantCulture, "{0}/user", ApiBaseUrl);
             using (var client = CreateHttpClient(accessToken))
+            using (var accountResponse = await client.GetAsync(userEndpoint))
             {
-                using (var response = await client.GetAsync(requestUri))
+                BitbucketProxy.BitbucketAccountInfo account = await this.ProcessResponse<BitbucketProxy.BitbucketAccountInfo>("GetAccoutInfo", accountResponse);
+
+                // v2 api mising firstname and last name
+                // BUG: https://bitbucket.org/site/master/issues/12735/missing-firstname-lastname-from-v2-user
+                if (string.IsNullOrWhiteSpace(account.first_name) && string.IsNullOrWhiteSpace(account.last_name))
                 {
-                    var user = await this.ProcessResponse<BitbucketProxy.BitbucketUserInfo>("GetAccoutInfo", response);
-                    return user.user;
+                    string[] names = account.display_name.Split(' ');
+                    if (names != null && names.Length == 2)
+                    {
+                        account.first_name = names[0];
+                        account.last_name = names[1];
+                    }
+                    else
+                    {
+                        account.first_name = account.display_name;
+                        account.last_name = account.display_name;
+                    }
                 }
+
+                return account;
             }
         }
 
@@ -162,13 +180,11 @@ namespace Microsoft.Web.Hosting.SourceControls
         {
             CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
 
-            var requestUri = BitbucketProxy.GetRequestUri(repoUrl);
+            var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl);
             using (var client = CreateHttpClient(accessToken))
+            using (var response = await client.GetAsync(requestUri))
             {
-                using (var response = await client.GetAsync(requestUri))
-                {
-                    return await this.ProcessResponse<BitbucketProxy.BitbucketRepoInfo>("GetRepository", response);
-                }
+                return (await this.ProcessResponse<BitbucketV2Repository>("GetRepository", response)).ToRepoInfo();
             }
         }
 
@@ -177,14 +193,11 @@ namespace Microsoft.Web.Hosting.SourceControls
             CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
 
-            var requestUri = BitbucketProxy.GetRequestUri(repoUrl, "branches-tags");
+            var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "refs", "branches");
             using (var client = CreateHttpClient(accessToken))
             {
-                using (var response = await client.GetAsync(requestUri))
-                {
-                    var info = await this.ProcessResponse<BitbucketProxy.BitbucketBranchesTagsInfo>("ListBranches", response);
-                    return info.branches;
-                }
+                List<BitbucketV2Branch> branchResults = await ListPagingItems<BitbucketV2Branch>(client, requestUri, "ListBranches");
+                return branchResults.Select(v => v.ToBranchInfo()).ToArray();
             }
         }
 
@@ -194,16 +207,18 @@ namespace Microsoft.Web.Hosting.SourceControls
             CommonUtils.ValidateNullArgument("path", path);
             CommonUtils.ValidateNullArgument("branch", branch);
 
-            var requestUri = String.Format("{0}/{1}/{2}", BitbucketProxy.GetRequestUri(repoUrl, "raw"), branch, path);
+            // Missing v2 api to get file content
+            // BUG: https://bitbucket.org/site/master/issues/12741/missing-v2-api-to-get-file-content
+            var requestUri = String.Format("{0}/{1}/{2}", BitbucketProxyHelper.GetRequestUri(APiV1BaseUrl, repoUrl, "raw"), branch, path);
             using (var client = CreateHttpClient(accessToken))
+            using (var response = await client.GetAsync(requestUri))
             {
-                var response = await client.GetAsync(requestUri);
                 if (response.IsSuccessStatusCode)
                 {
                     return (StreamContent)response.Content;
                 }
 
-                throw CreateOAuthException("DownloadFile", String.Empty, response.StatusCode);
+                throw CreateOAuthException("DownloadFile", await response.Content.ReadAsStringAsync(), response.StatusCode);
             }
         }
 
@@ -216,35 +231,37 @@ namespace Microsoft.Web.Hosting.SourceControls
             var hook = await GetWebHookInfo(repoUrl, accessToken, hookUrl);
             if (hook != null)
             {
-                if (string.Equals(hookUrl, hook.service.url, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(hookUrl, hook.url, StringComparison.OrdinalIgnoreCase))
                 {
                     return;
                 }
 
-                var requestUri = BitbucketProxy.GetRequestUri(repoUrl, "services", hook.id);
+                hook.url = hookUrl;
+                var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "hooks", hook.uuid);
                 using (var client = CreateHttpClient(accessToken))
+                using (var response = await client.PutAsJsonAsync(requestUri, hook))
                 {
-                    using (var response = await client.PutAsJsonAsync(requestUri, new BitbucketProxy.CreateBitbucketHookInfo(hookUrl)))
+                    if (!response.IsSuccessStatusCode)
                     {
-                        if (!response.IsSuccessStatusCode)
-                        {
-                            throw CreateOAuthException("UpdateWebHook", await response.Content.ReadAsStringAsync(), response.StatusCode);
-                        }
+                        throw CreateOAuthException("UpdateWebHook", await response.Content.ReadAsStringAsync(), response.StatusCode);
                     }
                 }
             }
             else
             {
-                var requestUri = BitbucketProxy.GetRequestUri(repoUrl, "services");
-                var content = new StringContent(String.Format("type=POST;URL={0}", hookUrl), Encoding.UTF8, "application/text");
+                hook = new BitbucketV2WebHook();
+                hook.active = true;
+                hook.description = "Azure Webhook";
+                hook.events = new string[] { "repo:push" };
+                hook.url = hookUrl;
+
+                var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "hooks");
                 using (var client = CreateHttpClient(accessToken))
+                using (var response = await client.PostAsJsonAsync(requestUri, hook))
                 {
-                    using (var response = await client.PostAsync(requestUri, content))
+                    if (!response.IsSuccessStatusCode)
                     {
-                        if (!response.IsSuccessStatusCode)
-                        {
-                            throw CreateOAuthException("AddWebHook", await response.Content.ReadAsStringAsync(), response.StatusCode);
-                        }
+                        throw CreateOAuthException("AddWebHook", await response.Content.ReadAsStringAsync(), response.StatusCode);
                     }
                 }
             }
@@ -259,15 +276,13 @@ namespace Microsoft.Web.Hosting.SourceControls
             var hook = await GetWebHookInfo(repoUrl, accessToken, hookUrl);
             if (hook != null)
             {
-                var requestUri = BitbucketProxy.GetRequestUri(repoUrl, "services", hook.id);
+                var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "hooks", hook.uuid);
                 using (var client = CreateHttpClient(accessToken))
+                using (var response = await client.DeleteAsync(requestUri))
                 {
-                    using (var response = await client.DeleteAsync(requestUri))
+                    if (!response.IsSuccessStatusCode)
                     {
-                        if (!response.IsSuccessStatusCode)
-                        {
-                            throw CreateOAuthException("RemoveWebHook", await response.Content.ReadAsStringAsync(), response.StatusCode);
-                        }
+                        throw CreateOAuthException("RemoveWebHook", await response.Content.ReadAsStringAsync(), response.StatusCode);
                     }
                 }
             }
@@ -286,15 +301,14 @@ namespace Microsoft.Web.Hosting.SourceControls
 
             // deploy key only allow read-only access
             var sshKeyInfo = new BitbucketProxy.BitbucketSSHKeyInfo { label = title, key = sshKey };
-            var requestUri = BitbucketProxy.GetRequestUri(repoUrl, "deploy-keys");
+            // BUG https://bitbucket.org/site/master/issues/12746/missing-v2-api-to-add-remove-deployment
+            var requestUri = BitbucketProxyHelper.GetRequestUri(APiV1BaseUrl, repoUrl, "deploy-keys");
             using (var client = CreateHttpClient(accessToken))
+            using (var response = await client.PostAsJsonAsync(requestUri, sshKeyInfo))
             {
-                using (var response = await client.PostAsJsonAsync(requestUri, sshKeyInfo))
+                if (!response.IsSuccessStatusCode)
                 {
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        throw CreateOAuthException("AddSSHKey", await response.Content.ReadAsStringAsync(), response.StatusCode);
-                    }
+                    throw CreateOAuthException("AddSSHKey", await response.Content.ReadAsStringAsync(), response.StatusCode);
                 }
             }
         }
@@ -308,7 +322,7 @@ namespace Microsoft.Web.Hosting.SourceControls
             var sshKeyInfo = await GetSSHKey(repoUrl, accessToken, sshKey);
             if (sshKeyInfo != null)
             {
-                var requestUri = BitbucketProxy.GetRequestUri(repoUrl, "deploy-keys", sshKeyInfo.pk);
+                var requestUri = BitbucketProxyHelper.GetRequestUri(APiV1BaseUrl, repoUrl, "deploy-keys", sshKeyInfo.pk);
                 using (var client = CreateHttpClient(accessToken))
                 {
                     using (var response = await client.DeleteAsync(requestUri))
@@ -324,43 +338,110 @@ namespace Microsoft.Web.Hosting.SourceControls
             return sshKeyInfo != null;
         }
 
-        private async Task<BitbucketProxy.BitbucketSSHKeyFullInfo> GetSSHKey(string repoUrl, string accessToken, string sshKey)
+        /// <summary>
+        /// Get Webhook service from v1 API
+        /// </summary>
+        public async Task<BitbucketProxy.BitbucketHookInfo> GetService(string repoUrl, string accessToken, string serviceUrl)
         {
-            var requestUri = BitbucketProxy.GetRequestUri(repoUrl, "deploy-keys");
+            CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
+            CommonUtils.ValidateNullArgument("accessToken", accessToken);
+            CommonUtils.ValidateNullArgument("serviceUrl", serviceUrl);
 
+            var serviceUri = new Uri(serviceUrl);
+            var requestUri = BitbucketProxyHelper.GetRequestUri(APiV1BaseUrl, repoUrl, "services");
             using (var client = CreateHttpClient(accessToken))
+            using (HttpResponseMessage response = await client.GetAsync(requestUri))
             {
-                using (var response = await client.GetAsync(requestUri))
+                BitbucketProxy.BitbucketHookInfo[] services = await ProcessResponse<BitbucketProxy.BitbucketHookInfo[]>("GetService", response);
+                return services.FirstOrDefault(service =>
                 {
-                    var sshKeys = await this.ProcessResponse<BitbucketProxy.BitbucketSSHKeyFullInfo[]>("GetSSHKey", response);
-                    return sshKeys.FirstOrDefault(info => BitbucketProxy.SSHKeyEquals(info.key, sshKey));
-                }
+                    if (service.service != null && service.service.url != null && string.Equals(service.service.type, "POST", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Uri configUri;
+                        if (Uri.TryCreate(service.service.url, UriKind.Absolute, out configUri))
+                        {
+                            return string.Equals(serviceUri.Host, configUri.Host, StringComparison.OrdinalIgnoreCase);
+                        }
+                    }
+
+                    return false;
+                });
             }
         }
 
-        private async Task<BitbucketProxy.BitbucketHookInfo> GetWebHookInfo(string repoUrl, string accessToken, string hookUrl)
+        /// <summary>
+        /// Remove Webhook service from v1 API
+        /// </summary>
+        public async Task<bool> RemoveService(string repoUrl, string accessToken, string serviceUrl)
+        {
+            CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
+            CommonUtils.ValidateNullArgument("accessToken", accessToken);
+            CommonUtils.ValidateNullArgument("serviceUrl", serviceUrl);
+
+            var service = await GetService(repoUrl, accessToken, serviceUrl);
+            if (service != null)
+            {
+                var requestUri = BitbucketProxyHelper.GetRequestUri(APiV1BaseUrl, repoUrl, "services", service.id);
+                using (var client = CreateHttpClient(accessToken))
+                using (HttpResponseMessage response = await client.DeleteAsync(requestUri))
+                {
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        throw CreateOAuthException("RemoveService", await response.Content.ReadAsStringAsync(), response.StatusCode);
+                    }
+                }
+            }
+
+            return service != null;
+        }
+
+        private async Task<List<T>> ListPagingItems<T>(HttpClient client, string initRequestUri, string operationName)
+        {
+            // For security and performence purpose, only read the first 30 pages
+            int count = 30;
+            var results = new List<T>();
+            while (!string.IsNullOrWhiteSpace(initRequestUri) && count-- > 0)
+            {
+                using (HttpResponseMessage response = await client.GetAsync(initRequestUri))
+                {
+                    var pagingResult = await ProcessResponse<BitbucketV2Paging<T>>(operationName, response);
+                    results.AddRange(pagingResult.values);
+                    initRequestUri = pagingResult.next;
+                }
+            }
+
+            return results;
+        }
+
+        private async Task<BitbucketProxy.BitbucketSSHKeyFullInfo> GetSSHKey(string repoUrl, string accessToken, string sshKey)
+        {
+            var requestUri = BitbucketProxyHelper.GetRequestUri(APiV1BaseUrl, repoUrl, "deploy-keys");
+
+            using (var client = CreateHttpClient(accessToken))
+            using (var response = await client.GetAsync(requestUri))
+            {
+                var sshKeys = await this.ProcessResponse<BitbucketProxy.BitbucketSSHKeyFullInfo[]>("GetSSHKey", response);
+                return sshKeys.FirstOrDefault(info => BitbucketProxy.SSHKeyEquals(info.key, sshKey));
+            }
+        }
+
+        private async Task<BitbucketV2WebHook> GetWebHookInfo(string repoUrl, string accessToken, string hookUrl)
         {
             var hookUri = new Uri(hookUrl);
-            var requestUri = BitbucketProxy.GetRequestUri(repoUrl, "services");
+            var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "hooks");
             using (var client = CreateHttpClient(accessToken))
             {
-                using (HttpResponseMessage response = await client.GetAsync(requestUri))
+                List<BitbucketV2WebHook> webhookResults = await ListPagingItems<BitbucketV2WebHook>(client, requestUri, "GetWebHookInfo");
+                return webhookResults.FirstOrDefault(w =>
                 {
-                    var services = await this.ProcessResponse<BitbucketProxy.BitbucketHookInfo[]>("GetWebHookInfo", response);
-                    return services.FirstOrDefault(service =>
+                    Uri configUri;
+                    if (Uri.TryCreate(w.url, UriKind.Absolute, out configUri))
                     {
-                        if (service.service != null && service.service.url != null && string.Equals(service.service.type, "POST", StringComparison.OrdinalIgnoreCase))
-                        {
-                            Uri configUri;
-                            if (Uri.TryCreate(service.service.url, UriKind.Absolute, out configUri))
-                            {
-                                return string.Equals(hookUri.Host, configUri.Host, StringComparison.OrdinalIgnoreCase);
-                            }
-                        }
+                        return string.Equals(hookUri.Host, configUri.Host, StringComparison.OrdinalIgnoreCase);
+                    }
 
-                        return false;
-                    });
-                }
+                    return false;
+                });
             }
         }
 
@@ -563,6 +644,54 @@ namespace Microsoft.Web.Hosting.SourceControls
         {
             public string href { get; set; }
             public string name { get; set; }
+        }
+
+        public class BitbucketV2BranchTarget
+        {
+            public string hash { get; set; }
+        }
+
+        public class BitbucketV2Branch
+        {
+            public string name { get; set; }
+            public BitbucketV2BranchTarget target { get; set; }
+
+            // Missing "mainbranch" property from v2 api
+            // BUG: https://bitbucket.org/site/master/issues/12740/missing-mainbranch-property-on-get-branch
+            public BitbucketProxy.BitbucketBranchInfo ToBranchInfo()
+            {
+                var info = new BitbucketProxy.BitbucketBranchInfo();
+                info.changeset = this.target.hash;
+                info.name = this.name;
+                return info;
+            }
+        }
+
+        public class BitbucketV2WebHook
+        {
+            public string uuid { get; set; }
+            public string url { get; set; }
+            public bool active { get; set; }
+            public string type { get; set; }
+            public string[] events { get; set; }
+            public string description { get; set; }
+
+            public BitbucketProxy.BitbucketHookInfo ToBitbucketHookInfo()
+            {
+                var info = new BitbucketProxy.BitbucketHookInfo();
+                info.id = this.uuid;
+                info.service = new BitbucketProxy.BitbucketServiceInfo();
+                info.service.type = type;
+                info.service.fields = new BitbucketProxy.BitbucketFieldInfo[] {
+                    new BitbucketProxy.BitbucketFieldInfo()
+                    {
+                        name= "URL",
+                        value= url
+                    }
+                };
+
+                return info;
+            }
         }
     }
 }

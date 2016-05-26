@@ -44,6 +44,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BitbucketProxyHelper.cs" />
     <Compile Include="BitbucketV2Proxy.cs" />
     <Compile Include="OneDriveProxy.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

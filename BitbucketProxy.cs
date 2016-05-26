@@ -18,7 +18,7 @@ namespace Microsoft.Web.Hosting.SourceControls
     public class BitbucketProxy
     {
         private const string SSHPrefix = "ssh-rsa ";
-
+        private const string ApiBaseUrl = "https://api.bitbucket.org/1.0";
         private readonly BitbucketProvider _provider;
 
         public BitbucketProxy(string clientId, string clientSecret, Func<HttpClient> httpClientFactory = null)
@@ -103,7 +103,7 @@ namespace Microsoft.Web.Hosting.SourceControls
             CommonUtils.ValidateNullArgument("token", token);
             CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
 
-            var requestUri = GetRequestUri(repoUrl);
+            var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl);
             return await _provider.GetAsync<BitbucketRepoInfo>("GetRepository", requestUri, token, tokenSecret);
         }
 
@@ -113,7 +113,7 @@ namespace Microsoft.Web.Hosting.SourceControls
             CommonUtils.ValidateNullArgument("token", token);
             CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
 
-            var requestUri = GetRequestUri(repoUrl, "branches-tags");
+            var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "branches-tags");
             var info = await _provider.GetAsync<BitbucketProxy.BitbucketBranchesTagsInfo>("ListBranches", requestUri, token, tokenSecret);
             return info.branches;
         }
@@ -126,7 +126,7 @@ namespace Microsoft.Web.Hosting.SourceControls
             CommonUtils.ValidateNullArgument("tokenSecret", tokenSecret);
             CommonUtils.ValidateNullArgument("branch", branch);
 
-            var requestUri = String.Format("{0}/{1}/{2}", GetRequestUri(repoUrl, "raw"), branch, path);
+            var requestUri = String.Format("{0}/{1}/{2}", BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "raw"), branch, path);
             return await _provider.GetStreamAsync("DownloadFile", requestUri, token, tokenSecret);
         }
 
@@ -145,12 +145,12 @@ namespace Microsoft.Web.Hosting.SourceControls
                     return;
                 }
 
-                var requestUri = GetRequestUri(repoUrl, "services", hook.id);
+                var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "services", hook.id);
                 await _provider.PutAsJsonAsync("UpdateWebHook", requestUri, token, tokenSecret, new CreateBitbucketHookInfo(hookUrl));
             }
             else
             {
-                var requestUri = GetRequestUri(repoUrl, "services");
+                var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "services");
                 var content = new StringContent(String.Format("type=POST;URL={0}", hookUrl), Encoding.UTF8, "application/text");
                 await _provider.PostAsync("AddWebHook", requestUri, token, tokenSecret, content);
             }
@@ -166,7 +166,7 @@ namespace Microsoft.Web.Hosting.SourceControls
             var hook = await GetWebHookInfo(repoUrl, token, tokenSecret, hookUrl);
             if (hook != null)
             {
-                var requestUri = GetRequestUri(repoUrl, "services", hook.id);
+                var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "services", hook.id);
                 await _provider.DeleteAsync("RemoveWebHook", requestUri, token, tokenSecret);
             }
 
@@ -185,7 +185,7 @@ namespace Microsoft.Web.Hosting.SourceControls
 
             // deploy key only allow read-only access
             var sshKeyInfo = new BitbucketSSHKeyInfo { label = title, key = sshKey };
-            var requestUri = GetRequestUri(repoUrl, "deploy-keys");
+            var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "deploy-keys");
             await _provider.PostAsJsonAsync("AddSSHKey", requestUri, token, tokenSecret, sshKeyInfo);
         }
 
@@ -199,7 +199,7 @@ namespace Microsoft.Web.Hosting.SourceControls
             var sshKeyInfo = await GetSSHKey(repoUrl, token, tokenSecret, sshKey);
             if (sshKeyInfo != null)
             {
-                var requestUri = GetRequestUri(repoUrl, "deploy-keys", sshKeyInfo.pk);
+                var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "deploy-keys", sshKeyInfo.pk);
                 await _provider.DeleteAsync("RemoveSSHKey", requestUri, token, tokenSecret);
             }
 
@@ -208,7 +208,7 @@ namespace Microsoft.Web.Hosting.SourceControls
 
         private async Task<BitbucketSSHKeyFullInfo> GetSSHKey(string repoUrl, string token, string tokenSecret, string sshKey)
         {
-            var requestUri = GetRequestUri(repoUrl, "deploy-keys");
+            var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "deploy-keys");
             var sshKeys = await _provider.GetAsync<BitbucketSSHKeyFullInfo[]>("GetSSHKey", requestUri, token, tokenSecret);
             return sshKeys.FirstOrDefault(info => SSHKeyEquals(info.key, sshKey));
         }
@@ -229,7 +229,7 @@ namespace Microsoft.Web.Hosting.SourceControls
         private async Task<BitbucketHookInfo> GetWebHookInfo(string repoUrl, string token, string tokenSecret, string hookUrl)
         {
             var hookUri = new Uri(hookUrl);
-            var requestUri = GetRequestUri(repoUrl, "services");
+            var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "services");
             var services = await _provider.GetAsync<BitbucketHookInfo[]>("GetWebHookInfo", requestUri, token, tokenSecret);
 
             return services.FirstOrDefault(service =>
@@ -245,31 +245,6 @@ namespace Microsoft.Web.Hosting.SourceControls
 
                 return false;
             });
-        }
-
-        static internal string GetRequestUri(string repoUrl, params string[] paths)
-        {
-            // repoId is the clone (https or ssh) url
-            var parts = repoUrl.Split(new[] { ':', '/' }, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 2)
-            {
-                throw new ArgumentException(repoUrl + " is invalid!");
-            }
-
-            var name = parts[parts.Length - 1];
-            if (name.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
-            {
-                parts[parts.Length - 1] = name.Substring(0, name.Length - 4);
-            }
-
-            if (paths == null || paths.Length == 0)
-            {
-                return String.Format("https://api.bitbucket.org/1.0/repositories/{0}/{1}", parts[parts.Length - 2], parts[parts.Length - 1]);
-            }
-            else
-            {
-                return String.Format("https://api.bitbucket.org/1.0/repositories/{0}/{1}/{2}", parts[parts.Length - 2], parts[parts.Length - 1], String.Join("/", paths));
-            }
         }
 
         class BitbucketProvider : OAuthV1Provider
