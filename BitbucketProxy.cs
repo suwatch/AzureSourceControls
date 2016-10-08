@@ -247,6 +247,18 @@ namespace Microsoft.Web.Hosting.SourceControls
             });
         }
 
+        public async Task<BitbucketHookInfo[]> ListWebHooks(string repoUrl, string token, string tokenSecret)
+        {
+            var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "services");
+            return await _provider.GetAsync<BitbucketHookInfo[]>("ListWebHooks", requestUri, token, tokenSecret);
+        }
+
+        public async Task<BitbucketSSHKeyFullInfo[]> ListSSHKeys(string repoUrl, string token, string tokenSecret)
+        {
+            var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "deploy-keys");
+            return await _provider.GetAsync<BitbucketSSHKeyFullInfo[]>("ListSSHKeys", requestUri, token, tokenSecret);
+        }
+
         class BitbucketProvider : OAuthV1Provider
         {
             public BitbucketProvider(string clientId, string clientSecret, Func<HttpClient> httpClientFactory)

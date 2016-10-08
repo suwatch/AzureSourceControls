@@ -28,17 +28,14 @@ namespace Microsoft.Web.Hosting.SourceControls
         }
 
         // https://bitbucket.org/site/oauth2/authorize?client_id={client_id}&scope={scope}&response_type=code&redirect_uri={redirect_uri}
-        public string GetOAuthUri(string state = null, string redirectUri = null)
+        public string GetOAuthUri(string state, string redirectUri)
         {
             CommonUtils.ValidateNullArgument("redirectUri", redirectUri);
 
             StringBuilder strb = new StringBuilder();
             strb.Append("https://bitbucket.org/site/oauth2/authorize");
             strb.AppendFormat("?client_id={0}", WebUtility.UrlEncode(_clientId));
-            if (!String.IsNullOrEmpty(redirectUri))
-            {
-                strb.AppendFormat("&redirect_uri={0}", WebUtility.UrlEncode(redirectUri));
-            }
+            strb.AppendFormat("&redirect_uri={0}", WebUtility.UrlEncode(redirectUri));
             strb.Append("&response_type=code");
             if (!String.IsNullOrEmpty(state))
             {
@@ -442,6 +439,39 @@ namespace Microsoft.Web.Hosting.SourceControls
 
                     return false;
                 });
+            }
+        }
+
+        public async Task<List<BitbucketV2WebHook>> ListWebHooks(string repoUrl, string accessToken)
+        {
+            var requestUri = BitbucketProxyHelper.GetRequestUri(ApiBaseUrl, repoUrl, "hooks");
+            using (var client = CreateHttpClient(accessToken))
+            {
+                return await ListPagingItems<BitbucketV2WebHook>(client, requestUri, "ListWebHooks");
+            }
+        }
+
+        public async Task<BitbucketProxy.BitbucketHookInfo[]> ListServices(string repoUrl, string accessToken)
+        {
+            CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
+            CommonUtils.ValidateNullArgument("accessToken", accessToken);
+
+            var requestUri = BitbucketProxyHelper.GetRequestUri(APiV1BaseUrl, repoUrl, "services");
+            using (var client = CreateHttpClient(accessToken))
+            using (HttpResponseMessage response = await client.GetAsync(requestUri))
+            {
+                return await ProcessResponse<BitbucketProxy.BitbucketHookInfo[]>("ListServices", response);
+            }
+        }
+
+        public async Task<BitbucketProxy.BitbucketSSHKeyFullInfo[]> ListSSHKeys(string repoUrl, string accessToken)
+        {
+            var requestUri = BitbucketProxyHelper.GetRequestUri(APiV1BaseUrl, repoUrl, "deploy-keys");
+
+            using (var client = CreateHttpClient(accessToken))
+            using (var response = await client.GetAsync(requestUri))
+            {
+                return await this.ProcessResponse<BitbucketProxy.BitbucketSSHKeyFullInfo[]>("GetSSHKey", response);
             }
         }
 
