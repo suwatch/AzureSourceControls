@@ -17,6 +17,7 @@ namespace Microsoft.Web.Hosting.SourceControls
 {
     public class GitHubProxy
     {
+        private const int MaxPages = 100;
         private const string SSHPrefix = "ssh-rsa ";
 
         private readonly string _clientId;
@@ -95,15 +96,7 @@ namespace Microsoft.Web.Hosting.SourceControls
         {
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
 
-            var tasks = new[] 
-            {
-                ListRepos(accessToken),
-                ListOrgRepos(accessToken)
-            };
-
-            await Task.WhenAll(tasks);
-
-            return CommonUtils.ConcatEnumerable(tasks.Select(t => t.Result));
+            return await ListRepos(accessToken, all: true);
         }
 
         public async Task<GitHubAccountInfo> GetAccountInfo(string accessToken)
@@ -391,12 +384,19 @@ namespace Microsoft.Web.Hosting.SourceControls
             }
         }
 
-        private async Task<IEnumerable<GitHubRepoInfo>> ListRepos(string accessToken, string orgLogin = null)
+        private async Task<IEnumerable<GitHubRepoInfo>> ListRepos(string accessToken, string orgLogin = null, bool all = false)
         {
             StringBuilder strb = new StringBuilder();
             if (orgLogin == null)
             {
-                strb.Append("https://api.github.com/user/repos?type=owner");
+                if (all)
+                {
+                    strb.Append("https://api.github.com/user/repos");
+                }
+                else
+                {
+                    strb.Append("https://api.github.com/user/repos?type=owner");
+                }
             }
             else
             {
@@ -417,8 +417,8 @@ namespace Microsoft.Web.Hosting.SourceControls
 
         private async Task<IEnumerable<GitHubRepoInfo>> IterateReposAsync(string accessToken, HttpResponseMessage response, IEnumerable<GitHubRepoInfo> results = null, int loop = 0)
         {
-            // we cap out at 10 iterations.
-            if (loop < 10 && response.IsSuccessStatusCode && response.Headers.Contains("link"))
+            // we cap out at MaxPages iterations.
+            if (loop < MaxPages && response.IsSuccessStatusCode && response.Headers.Contains("link"))
             {
                 // link header: <https://api.github.com/organizations/1065621/repos?access_token=5d229be44442a299950aa3386bdb279384bd5dfb&page=2&per_page=10&sort=updated>; rel="next", <https://api.github.com/organizations/1065621/repos?access_token=5d229be44442a299950aa3386bdb279384bd5dfb&page=6&per_page=10&sort=updated>; rel="last"
                 string values = response.Headers.GetValues("link").FirstOrDefault();
