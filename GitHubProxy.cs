@@ -17,14 +17,13 @@ namespace Microsoft.Web.Hosting.SourceControls
 {
     public class GitHubProxy
     {
-        private const int MaxPages = 100;
         private const string SSHPrefix = "ssh-rsa ";
 
         private readonly string _clientId;
         private readonly string _clientSecret;
-        private readonly Func<HttpClient> _httpClientFactory;
+        private readonly Func<HttpClientHandler, HttpClient> _httpClientFactory;
 
-        public GitHubProxy(string clientId = null, string clientSecret = null, Func<HttpClient> httpClientFactory = null)
+        public GitHubProxy(string clientId = null, string clientSecret = null, Func<HttpClientHandler, HttpClient> httpClientFactory = null)
         {
             _clientId = clientId;
             _clientSecret = clientSecret;
@@ -96,7 +95,15 @@ namespace Microsoft.Web.Hosting.SourceControls
         {
             CommonUtils.ValidateNullArgument("accessToken", accessToken);
 
-            return await ListRepos(accessToken, all: true);
+            var tasks = new[]
+            {
+                ListRepos(accessToken),
+                ListOrgRepos(accessToken)
+            };
+
+            await Task.WhenAll(tasks);
+
+            return CommonUtils.ConcatEnumerable(tasks.Select(t => t.Result));
         }
 
         public async Task<GitHubAccountInfo> GetAccountInfo(string accessToken)
@@ -116,14 +123,46 @@ namespace Microsoft.Web.Hosting.SourceControls
         public async Task<GitHubRepoInfo> GetRepository(string repoUrl, string accessToken)
         {
             CommonUtils.ValidateNullArgument("repoUrl", repoUrl);
-
             var requestUri = GetRequestUri(repoUrl);
-            using (var client = CreateGitHubClient(accessToken))
+
+            try
             {
+                using (var client = CreateGitHubClient(accessToken))
                 using (var response = await client.GetAsync(requestUri))
                 {
                     return await ProcessResponse<GitHubRepoInfo>("GetRepository", response);
                 }
+            }
+            catch (OAuthException oae)
+            {
+                // repo might be renamed
+                if (oae.StatusCode != HttpStatusCode.NotFound)
+                {
+                    throw;
+                }
+            }
+
+            // handle rename case
+            using (var handler = new HttpClientHandler() { AllowAutoRedirect = false })
+            using (var client = CreateGitHubClient(accessToken, handler))
+            using (var response = await client.GetAsync(requestUri))
+            {
+                string content = await response.ReadContentAsync();
+                if (response.StatusCode != HttpStatusCode.MovedPermanently)
+                {
+                    throw CreateOAuthException("GetRepository", content, response.StatusCode);
+                }
+                // sample result payload: {"message":"Moved Permanently","url":"https://api.github.com/repositories/42146335","documentation_url":"https://developer.github.com/v3/#http-redirects"}
+                var renameResult = JsonUtils.Deserialize<RenamedRepoResult>(content);
+                // get rename url
+                requestUri = renameResult.url;
+            }
+
+            // query renamed repo
+            using (var client = CreateGitHubClient(accessToken))
+            using (var response = await client.GetAsync(requestUri))
+            {
+                return await ProcessResponse<GitHubRepoInfo>("GetRepository", response);
             }
         }
 
@@ -384,19 +423,12 @@ namespace Microsoft.Web.Hosting.SourceControls
             }
         }
 
-        private async Task<IEnumerable<GitHubRepoInfo>> ListRepos(string accessToken, string orgLogin = null, bool all = false)
+        private async Task<IEnumerable<GitHubRepoInfo>> ListRepos(string accessToken, string orgLogin = null)
         {
             StringBuilder strb = new StringBuilder();
             if (orgLogin == null)
             {
-                if (all)
-                {
-                    strb.Append("https://api.github.com/user/repos");
-                }
-                else
-                {
-                    strb.Append("https://api.github.com/user/repos?type=owner");
-                }
+                strb.Append("https://api.github.com/user/repos");
             }
             else
             {
@@ -417,8 +449,8 @@ namespace Microsoft.Web.Hosting.SourceControls
 
         private async Task<IEnumerable<GitHubRepoInfo>> IterateReposAsync(string accessToken, HttpResponseMessage response, IEnumerable<GitHubRepoInfo> results = null, int loop = 0)
         {
-            // we cap out at MaxPages iterations.
-            if (loop < MaxPages && response.IsSuccessStatusCode && response.Headers.Contains("link"))
+            // we cap out at 10 iterations.
+            if (loop < 10 && response.IsSuccessStatusCode && response.Headers.Contains("link"))
             {
                 // link header: <https://api.github.com/organizations/1065621/repos?access_token=5d229be44442a299950aa3386bdb279384bd5dfb&page=2&per_page=10&sort=updated>; rel="next", <https://api.github.com/organizations/1065621/repos?access_token=5d229be44442a299950aa3386bdb279384bd5dfb&page=6&per_page=10&sort=updated>; rel="last"
                 string values = response.Headers.GetValues("link").FirstOrDefault();
@@ -477,9 +509,9 @@ namespace Microsoft.Web.Hosting.SourceControls
             throw CreateOAuthException(operation, content, response.StatusCode);
         }
 
-        private HttpClient CreateGitHubClient(string accessToken)
+        private HttpClient CreateGitHubClient(string accessToken, HttpClientHandler handler = null)
         {
-            HttpClient client = CreateHttpClient();
+            HttpClient client = CreateHttpClient(handler);
             if (!String.IsNullOrEmpty(accessToken))
             {
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("token", accessToken);
@@ -487,9 +519,9 @@ namespace Microsoft.Web.Hosting.SourceControls
             return client;
         }
 
-        private HttpClient CreateHttpClient()
+        private HttpClient CreateHttpClient(HttpClientHandler handler = null)
         {
-            HttpClient client = _httpClientFactory != null ? _httpClientFactory() : new HttpClient();
+            HttpClient client = _httpClientFactory != null ? _httpClientFactory(handler) : new HttpClient();
             client.MaxResponseContentBufferSize = 1024 * 1024 * 10;
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue(Constants.JsonMediaType));
             if (!client.DefaultRequestHeaders.Contains(Constants.UserAgentHeader))
@@ -671,6 +703,12 @@ namespace Microsoft.Web.Hosting.SourceControls
             public string code { get; set; }
             public string field { get; set; }
             public string message { get; set; }
+        }
+
+        public class RenamedRepoResult
+        {
+            public string message { get; set; }
+            public string url { get; set; }
         }
     }
 }

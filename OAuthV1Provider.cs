@@ -17,9 +17,9 @@ namespace Microsoft.Web.Hosting.SourceControls
     {
         private readonly string _clientId;
         private readonly string _clientSecret;
-        private readonly Func<HttpClient> _httpClientFactory;
+        private readonly Func<HttpClientHandler, HttpClient> _httpClientFactory;
 
-        protected OAuthV1Provider(string clientId, string clientSecret, Func<HttpClient> httpClientFactory)
+        protected OAuthV1Provider(string clientId, string clientSecret, Func<HttpClientHandler, HttpClient> httpClientFactory)
         {
             CommonUtils.ValidateNullArgument("clientId", clientId);
             CommonUtils.ValidateNullArgument("clientSecret", clientSecret);
@@ -316,7 +316,7 @@ namespace Microsoft.Web.Hosting.SourceControls
 
         private HttpClient CreateHttpClient()
         {
-            HttpClient client = _httpClientFactory != null ? _httpClientFactory() : new HttpClient();
+            HttpClient client = _httpClientFactory != null ? _httpClientFactory(null) : new HttpClient();
             client.MaxResponseContentBufferSize = 1024 * 1024 * 10;
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue(Constants.JsonMediaType));
             if (!client.DefaultRequestHeaders.Contains(Constants.UserAgentHeader))

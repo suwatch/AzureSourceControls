@@ -17,7 +17,7 @@ namespace Microsoft.Web.Hosting.SourceControls
     {
         private readonly DropboxProvider _provider;
 
-        public DropboxProxy(string clientId, string clientSecret, Func<HttpClient> httpClientFactory = null)
+        public DropboxProxy(string clientId, string clientSecret, Func<HttpClientHandler, HttpClient> httpClientFactory = null)
         {
             _provider = new DropboxProvider(clientId, clientSecret, httpClientFactory);
         }
@@ -126,7 +126,7 @@ namespace Microsoft.Web.Hosting.SourceControls
 
         class DropboxProvider : OAuthV1Provider
         {
-            public DropboxProvider(string clientId, string clientSecret, Func<HttpClient> httpClientFactory)
+            public DropboxProvider(string clientId, string clientSecret, Func<HttpClientHandler, HttpClient> httpClientFactory)
                 : base(clientId, clientSecret, httpClientFactory)
             {
             }

@@ -22,9 +22,9 @@ namespace Microsoft.Web.Hosting.SourceControls
 
         private readonly string _clientId;
         private readonly string _clientSecret;
-        private readonly Func<HttpClient> _httpClientFactory;
+        private readonly Func<HttpClientHandler, HttpClient> _httpClientFactory;
 
-        public OneDriveProxy(string clientId = null, string clientSecret = null, Func<HttpClient> httpClientFactory = null)
+        public OneDriveProxy(string clientId = null, string clientSecret = null, Func<HttpClientHandler, HttpClient> httpClientFactory = null)
         {
             _clientId = clientId;
             _clientSecret = clientSecret;
@@ -413,7 +413,7 @@ namespace Microsoft.Web.Hosting.SourceControls
 
         private HttpClient CreateHttpClient(string accessToken = null)
         {
-            HttpClient client = _httpClientFactory != null ? _httpClientFactory() : new HttpClient();
+            HttpClient client = _httpClientFactory != null ? _httpClientFactory(null) : new HttpClient();
             client.MaxResponseContentBufferSize = 1024 * 1024 * 10;
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue(Constants.JsonMediaType));
             if (!client.DefaultRequestHeaders.Contains(Constants.UserAgentHeader))

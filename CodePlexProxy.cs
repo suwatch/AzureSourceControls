@@ -17,7 +17,7 @@ namespace Microsoft.Web.Hosting.SourceControls
     {
         private readonly CodePlexProvider _provider;
 
-        public CodePlexProxy(string clientId, string clientSecret, Func<HttpClient> httpClientFactory = null)
+        public CodePlexProxy(string clientId, string clientSecret, Func<HttpClientHandler, HttpClient> httpClientFactory = null)
         {
             _provider = new CodePlexProvider(clientId, clientSecret, httpClientFactory);
         }
@@ -137,7 +137,7 @@ namespace Microsoft.Web.Hosting.SourceControls
 
         class CodePlexProvider : OAuthV1Provider
         {
-            public CodePlexProvider(string clientId, string clientSecret, Func<HttpClient> httpClientFactory)
+            public CodePlexProvider(string clientId, string clientSecret, Func<HttpClientHandler, HttpClient> httpClientFactory)
                 : base(clientId, clientSecret, httpClientFactory)
             {
             }

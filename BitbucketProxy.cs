@@ -21,7 +21,7 @@ namespace Microsoft.Web.Hosting.SourceControls
         private const string ApiBaseUrl = "https://api.bitbucket.org/1.0";
         private readonly BitbucketProvider _provider;
 
-        public BitbucketProxy(string clientId, string clientSecret, Func<HttpClient> httpClientFactory = null)
+        public BitbucketProxy(string clientId, string clientSecret, Func<HttpClientHandler, HttpClient> httpClientFactory = null)
         {
             _provider = new BitbucketProvider(clientId, clientSecret, httpClientFactory);
         }
@@ -261,7 +261,7 @@ namespace Microsoft.Web.Hosting.SourceControls
 
         class BitbucketProvider : OAuthV1Provider
         {
-            public BitbucketProvider(string clientId, string clientSecret, Func<HttpClient> httpClientFactory)
+            public BitbucketProvider(string clientId, string clientSecret, Func<HttpClientHandler, HttpClient> httpClientFactory)
                 : base(clientId, clientSecret, httpClientFactory)
             {
             }

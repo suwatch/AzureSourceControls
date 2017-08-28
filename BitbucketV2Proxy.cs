@@ -18,9 +18,9 @@ namespace Microsoft.Web.Hosting.SourceControls
         private const string APiV1BaseUrl = "https://api.bitbucket.org/1.0";
         private readonly string _clientId;
         private readonly string _clientSecret;
-        private readonly Func<HttpClient> _httpClientFactory;
+        private readonly Func<HttpClientHandler, HttpClient> _httpClientFactory;
 
-        public BitbucketV2Proxy(string clientId, string clientSecret, Func<HttpClient> httpClientFactory = null)
+        public BitbucketV2Proxy(string clientId, string clientSecret, Func<HttpClientHandler, HttpClient> httpClientFactory = null)
         {
             _clientId = clientId;
             _clientSecret = clientSecret;
@@ -477,7 +477,7 @@ namespace Microsoft.Web.Hosting.SourceControls
 
         private HttpClient CreateHttpClient(string accessToken = null)
         {
-            HttpClient client = _httpClientFactory != null ? _httpClientFactory() : new HttpClient();
+            HttpClient client = _httpClientFactory != null ? _httpClientFactory(null) : new HttpClient();
             client.MaxResponseContentBufferSize = 1024 * 1024 * 10;
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue(Constants.JsonMediaType));
             if (!client.DefaultRequestHeaders.Contains(Constants.UserAgentHeader))
